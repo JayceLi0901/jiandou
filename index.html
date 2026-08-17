@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#F6F1E8" />
+<meta name="description" content="鉴豆 — 咖啡豆档案、养豆提醒与克重管家" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="鉴豆" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="icon" type="image/png" href="icons/icon-192.png" />
+<title>鉴豆 · 咖啡豆管家</title>
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+<div id="app">
+  <header id="topbar" class="topbar" hidden>
+    <button class="topbar-back" id="back-btn" aria-label="返回">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="topbar-title" id="page-title">鉴豆</div>
+    <div class="topbar-slot" id="topbar-slot"></div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar" id="tabbar" aria-label="主导航">
+    <a class="tab" href="#/" data-tab="home" id="tab-home">
+      <svg viewBox="0 0 24 24" width="24" height="24" class="tab-ic">
+        <ellipse cx="12" cy="12" rx="7.2" ry="9.4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M12 3.4c-2.6 2.4-2.6 5 0 8.6-2.6 3.6-2.6 6.2 0 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span>豆仓</span>
+    </a>
+    <a class="tab-fab" href="#/add" id="fab" aria-label="拍照建档">
+      <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </a>
+    <a class="tab" href="#/stats" data-tab="stats" id="tab-stats">
+      <svg viewBox="0 0 24 24" width="24" height="24" class="tab-ic">
+        <path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>统计</span>
+    </a>
+    <a class="tab" href="#/settings" data-tab="settings" id="tab-settings">
+      <svg viewBox="0 0 24 24" width="24" height="24" class="tab-ic">
+        <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span>设置</span>
+    </a>
+  </nav>
+</div>
+<div id="toast-root"></div>
+<div id="sheet-root"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

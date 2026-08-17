@@ -1,0 +1,17 @@
+{
+  "name": "鉴豆 · 咖啡豆管家",
+  "short_name": "鉴豆",
+  "description": "咖啡豆档案、养豆提醒与克重管家",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F1E8",
+  "theme_color": "#F6F1E8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
