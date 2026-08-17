@@ -170,7 +170,10 @@ export async function render(view, params) {
     }
   }
 
-  $('#skip-photo')?.addEventListener('click', (e) => { e.preventDefault(); $('#photo-box').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  $('#skip-photo')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    view.querySelector('.form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   /* 删除（编辑模式） */
   $('#del-btn')?.addEventListener('click', async () => {
