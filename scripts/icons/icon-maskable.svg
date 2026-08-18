@@ -10,16 +10,18 @@
       <stop offset="1" stop-color="#F1E3CD"/>
     </linearGradient>
     <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="12"/>
+      <feGaussianBlur stdDeviation="16"/>
     </filter>
+    <clipPath id="beanClip"><ellipse cx="256" cy="250" rx="128" ry="168"/></clipPath>
   </defs><rect width="512" height="512" fill="#F6F1E8"/><g transform="translate(56 50) scale(0.78)">
-  <ellipse cx="270" cy="398" rx="148" ry="30" fill="#3E2A1A" opacity="0.13" filter="url(#soft)"/>
+  <ellipse cx="288" cy="410" rx="134" ry="22" fill="#3E2A1A" opacity="0.15" filter="url(#soft)"/>
   <g transform="rotate(32 256 250)">
     <ellipse cx="256" cy="250" rx="128" ry="168" fill="url(#bean)"/>
-    <ellipse cx="256" cy="250" rx="126" ry="166" fill="none" stroke="#2E1C0E" stroke-opacity="0.30" stroke-width="4"/>
-    <path d="M 172 158 C 196 118 244 100 292 110" fill="none" stroke="#EACD9F" stroke-opacity="0.40" stroke-width="20" stroke-linecap="round"/>
-    <path d="M 256 92 C 314 140 314 190 256 250 C 198 310 198 360 256 408"
-          fill="none" stroke="#2A1808" stroke-opacity="0.20" stroke-width="34" stroke-linecap="round" transform="translate(4 5)"/>
+    <g clip-path="url(#beanClip)">
+      <ellipse cx="304" cy="316" rx="150" ry="192" fill="#241203" opacity="0.28" filter="url(#soft)"/>
+      <path d="M 172 158 C 196 118 244 100 292 110" fill="none" stroke="#EACD9F" stroke-opacity="0.38" stroke-width="18" stroke-linecap="round"/>
+    </g>
     <path d="M 256 92 C 314 140 314 190 256 250 C 198 310 198 360 256 408"
           fill="none" stroke="url(#crease)" stroke-width="26" stroke-linecap="round"/>
+    <ellipse cx="256" cy="250" rx="127" ry="167" fill="none" stroke="#26150A" stroke-opacity="0.15" stroke-width="3"/>
   </g></g></svg>
