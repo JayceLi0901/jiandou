@@ -4,7 +4,7 @@
 import { calcRemaining, uid } from './util.js';
 
 const DB_NAME = 'jiandou';
-const DB_VER = 1;
+const DB_VER = 2;
 
 const ready = new Promise((resolve, reject) => {
   const req = indexedDB.open(DB_NAME, DB_VER);
@@ -17,6 +17,7 @@ const ready = new Promise((resolve, reject) => {
     }
     if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+    if (!db.objectStoreNames.contains('equip')) db.createObjectStore('equip', { keyPath: 'id' });
   };
   req.onsuccess = () => resolve(req.result);
   req.onerror = () => reject(req.error);
@@ -77,6 +78,12 @@ export const db = {
       await wrap((await tx('settings', 'readwrite')).put({ key, value }));
     },
   },
+  /* 器具库：壶/滤杯/滤纸/磨豆机，一次录入多次使用 */
+  equip: {
+    async all() { return wrap((await tx('equip', 'readonly')).getAll()); },
+    async put(item) { return wrap((await tx('equip', 'readwrite')).put(item)); },
+    async del(id) { return wrap((await tx('equip', 'readwrite')).delete(id)); },
+  },
 };
 
 /* 记一笔流水并同步豆子剩余克重 */
@@ -92,6 +99,8 @@ export async function addTx(beanId, data) {
     grams: Number(data.grams), // adjust 为带符号增量
     note: data.note || '',
     rating: data.rating || null,
+    equip: data.equip || null,     // {kettle,dripper,paper,grinder} 名称
+    params: data.params || null,   // {temp,water,ratio,grind} 冲煮参数
   };
   await db.txs.put(t);
   const all = await db.txs.byBean(beanId);

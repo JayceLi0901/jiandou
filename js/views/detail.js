@@ -1,6 +1,6 @@
 /* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
 import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
-import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, daysBetween, todayStr, esc } from '../util.js';
+import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, daysBetween, todayStr, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
 
@@ -43,7 +43,7 @@ async function draw(view, full) {
     <div class="hero">
       ${url
         ? `<img class="hero-photo" id="hero-photo" src="${url}" alt="包装照片"/>`
-        : `<div class="hero-photo empty" style="margin:0 auto;">无照片</div>`}
+        : `<img class="hero-photo" src="icons/icon-maskable-512.png" alt=""/>`}
       <div class="hero-name">${esc(bean.name || '未命名')}</div>
       <div class="hero-sub">${esc([bean.roaster, bean.origin].filter(Boolean).join(' · ') || '补充烘焙商与产地信息')}</div>
       <div class="chips">
@@ -115,8 +115,8 @@ async function draw(view, full) {
 
   const $ = (s) => view.querySelector(s);
 
-  /* 看大图 */
-  $('#hero-photo')?.addEventListener('click', () => viewImage(url));
+  /* 看大图（无真实照片时不放大占位图标） */
+  $('#hero-photo')?.addEventListener('click', () => { if (url) viewImage(url); });
 
   /* 冲煮 */
   $('#act-brew')?.addEventListener('click', () => brewSheet(bean));
@@ -153,6 +153,19 @@ async function draw(view, full) {
 }
 
 /* ---------------- 流水列表 ---------------- */
+/* 冲煮参数与器具汇总成一行小字：92°C · 1:15 · 270g 水 · C40 24格 · V60 */
+function metaOf(t) {
+  const meta = [];
+  if (t.params) {
+    if (t.params.temp != null) meta.push(t.params.temp + '°C');
+    if (t.params.ratio) meta.push('1:' + t.params.ratio);
+    if (t.params.water != null) meta.push(fmtG(t.params.water) + 'g 水');
+    if (t.params.grind) meta.push(t.params.grind);
+  }
+  if (t.equip) for (const v of Object.values(t.equip)) if (v) meta.push(v);
+  return meta.join(' · ');
+}
+
 function txListHtml(txs) {
   if (!txs.length) return '';
   const META = {
@@ -178,6 +191,7 @@ function txListHtml(txs) {
           <span class="tx-grams ${neg ? 'neg' : 'pos'}">${g} g</span>
         </div>
         <div class="tx-date">${t.date}</div>
+        ${metaOf(t) ? `<div class="tx-meta">${esc(metaOf(t))}</div>` : ''}
         ${t.note ? `<div class="tx-note">${esc(t.note)}</div>` : ''}
         ${ratingHtml}
       </div>
@@ -185,8 +199,47 @@ function txListHtml(txs) {
   }).join('');
 }
 
-/* ---------------- 冲煮弹层 ---------------- */
-function brewSheet(bean) {
+/* ---------------- 冲煮弹层（器具 + 参数 + 评分） ---------------- */
+const EQUIP_CATS = [
+  { key: 'kettle',  label: '壶' },
+  { key: 'dripper', label: '滤杯' },
+  { key: 'paper',   label: '滤纸' },
+  { key: 'grinder', label: '磨豆机' },
+];
+
+/* 弹层里新增一件器具（保存后自动选用） */
+function promptNewEquip(catLabel) {
+  return new Promise((resolve) => {
+    let settled = false;
+    sheet({
+      title: `＋ 新增${catLabel}`,
+      html: `
+        <div class="field" style="margin:0;">
+          <label>名称</label>
+          <input type="text" id="ne-name" maxlength="24" placeholder="如 ${catLabel === '磨豆机' ? 'Comandante C40' : catLabel + '的名字'}"/>
+        </div>
+        <button class="btn primary block" id="ne-save" style="margin-top:14px;">保存并选用</button>`,
+      onMount(el, close) {
+        const input = el.querySelector('#ne-name');
+        input.focus();
+        el.querySelector('#ne-save').onclick = () => {
+          const v = input.value.trim();
+          if (!v) { toast('请输入名称', 'err'); return; }
+          settled = true;
+          close();
+          resolve(v);
+        };
+      },
+      onClose: () => { if (!settled) resolve(null); },
+    });
+  });
+}
+
+async function brewSheet(bean) {
+  const items = await db.equip.all();
+  const lastEquip = (await db.settings.get('lastEquip', {})) || {};
+  const lastParams = (await db.settings.get('lastParams', {})) || {};
+
   const html = `
     <div class="quick-row">
       <button class="quick-pill" data-g="15">15g</button>
@@ -199,15 +252,40 @@ function brewSheet(bean) {
       <div class="field"><label>日期</label>
         <input type="date" id="brew-date" value="${todayStr()}" max="${todayStr()}"/></div>
     </div>
+
+    <div class="field-row">
+      <div class="field"><label>水温 ℃</label>
+        <input type="number" id="brew-temp" inputmode="decimal" min="0" max="100" step="0.5" value="${lastParams.temp ?? 92}"/></div>
+      <div class="field"><label>粉水比</label>
+        <select id="brew-ratio">
+          ${[13, 14, 15, 16, 17].map((r) => `<option value="${r}"${Number(lastParams.ratio ?? 15) === r ? ' selected' : ''}>1:${r}</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>水量 g（自动按比例）</label>
+        <input type="number" id="brew-water" inputmode="decimal" min="0" step="1" value=""/></div>
+      <div class="field"><label>研磨度</label>
+        <input type="text" id="brew-grind" placeholder="如 C40 24格" maxlength="20" value="${esc(lastParams.grind || '')}"/></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field"><label>壶</label><select data-cat="kettle"></select></div>
+      <div class="field"><label>滤杯</label><select data-cat="dripper"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>滤纸</label><select data-cat="paper"></select></div>
+      <div class="field"><label>磨豆机</label><select data-cat="grinder"></select></div>
+    </div>
+
     <div class="field"><label>备注（选填）</label>
-      <input type="text" id="brew-note" placeholder="如：V60 1:15，明天请朋友喝" maxlength="50"/></div>
+      <input type="text" id="brew-note" placeholder="想说点什么都可以" maxlength="50"/></div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 4px;">
       <span style="font-size:13.5px;color:var(--ink-2);">顺手打个分？</span>
       <label class="switch"><input type="checkbox" id="brew-rate-on"/><span class="tr"></span></label>
     </div>
     <div id="brew-rates" hidden>
-      ${RATING_DIMS.map((d, i) => `
+      ${RATING_DIMS.map((d) => `
         <div class="rate-row">
           <div class="rate-head"><span class="rate-label">${d.label}</span><span class="rate-val" id="rv-${d.key}">7.0</span></div>
           <input type="range" class="rate" min="0" max="10" step="0.5" value="7" data-k="${d.key}"/>
@@ -220,33 +298,100 @@ function brewSheet(bean) {
   sheet({
     title: `☕ ${bean.name || '冲煮'}`,
     html,
-    onMount(el, close) {
+    async onMount(el, close) {
+      const gEl = el.querySelector('#brew-g');
+      const ratioSel = el.querySelector('#brew-ratio');
+      const waterEl = el.querySelector('#brew-water');
+
+      /* 水量自动按 粉量 × 粉水比 计算，手动改过则尊重手输 */
+      let waterDirty = false;
+      const syncWater = () => {
+        if (waterDirty) return;
+        const g = parseFloat(gEl.value) || 0;
+        waterEl.value = g ? Math.round(g * Number(ratioSel.value)) : '';
+      };
+      gEl.addEventListener('input', syncWater);
+      ratioSel.addEventListener('change', syncWater);
+      waterEl.addEventListener('input', () => { waterDirty = true; });
+      syncWater();
+
+      /* 器具下拉：默认★ > 上次使用 > 不记录；可现场新增 */
+      const fillSelect = (sel, cat) => {
+        const catItems = items.filter((i) => i.cat === cat);
+        const def = catItems.find((i) => i.isDefault);
+        const pre = (def && def.name) || lastEquip[cat] || '';
+        sel.innerHTML = `<option value="">不记录</option>` +
+          catItems.map((i) => `<option value="${esc(i.name)}">${esc(i.name)}</option>`).join('') +
+          `<option value="__new__">＋ 新增…</option>`;
+        sel.value = catItems.some((i) => i.name === pre) ? pre : '';
+      };
+      const selects = el.querySelectorAll('select[data-cat]');
+      selects.forEach((sel) => {
+        const cat = sel.dataset.cat;
+        const catLabel = EQUIP_CATS.find((c) => c.key === cat).label;
+        fillSelect(sel, cat);
+        sel.addEventListener('change', async () => {
+          if (sel.value !== '__new__') return;
+          const name = await promptNewEquip(catLabel);
+          if (name) {
+            const item = { id: uid(), cat, name, isDefault: false };
+            items.push(item);
+            await db.equip.put(item);
+            fillSelect(sel, cat);
+            sel.value = name;
+            toast(`已添加${catLabel}「${name}」`, 'ok');
+          } else {
+            sel.value = '';
+          }
+        });
+      });
+
+      /* 快捷克数 */
       el.querySelectorAll('.quick-pill').forEach((p) => {
         p.onclick = () => {
           el.querySelectorAll('.quick-pill').forEach((x) => x.classList.toggle('on', x === p));
-          el.querySelector('#brew-g').value = p.dataset.g;
+          gEl.value = p.dataset.g;
+          syncWater();
         };
       });
       el.querySelector('.quick-pill').classList.add('on');
+
+      /* 评分开关 */
       const on = el.querySelector('#brew-rate-on');
       on.onchange = () => { el.querySelector('#brew-rates').hidden = !on.checked; };
       el.querySelectorAll('input[type="range"].rate').forEach((r) => {
         r.oninput = () => { el.querySelector('#rv-' + r.dataset.k).textContent = Number(r.value).toFixed(1); };
       });
+
+      /* 保存 */
       el.querySelector('#brew-save').onclick = async () => {
-        const g = parseFloat(el.querySelector('#brew-g').value);
+        const g = parseFloat(gEl.value);
         if (!(g > 0)) { toast('请输入有效克数', 'err'); return; }
+
+        const equip = {};
+        selects.forEach((s) => { if (s.value && s.value !== '__new__') equip[s.dataset.cat] = s.value; });
+        const params = {
+          temp: parseFloat(el.querySelector('#brew-temp').value) || null,
+          water: parseFloat(waterEl.value) || null,
+          ratio: Number(ratioSel.value),
+          grind: el.querySelector('#brew-grind').value.trim(),
+        };
+
         const rating = on.checked ? {} : null;
         if (on.checked) {
           el.querySelectorAll('input[type="range"].rate').forEach((r) => { rating[r.dataset.k] = Number(r.value); });
         }
-        const remainNow = Number(bean.remainingWeight) || 0;
-        if (g > remainNow) toast('注意：本次克数超过了剩余克重', 'err');
+
+        if (g > (Number(bean.remainingWeight) || 0)) toast('注意：本次克数超过了剩余克重', 'err');
+
+        await db.settings.set('lastEquip', equip);
+        await db.settings.set('lastParams', params);
+
         await addTx(bean.id, {
           type: 'brew', grams: g,
           date: el.querySelector('#brew-date').value || todayStr(),
           note: el.querySelector('#brew-note').value.trim(),
-          rating,
+          rating, equip, params,
         });
         vibrate(10);
         toast(`冲煮 ${fmtG(g)}g 已记录 ☕`, 'ok');

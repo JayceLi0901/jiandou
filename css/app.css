@@ -109,7 +109,7 @@ body {
 .view.enter { animation: viewIn .28s ease both; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* ---------------- 底部导航 ---------------- */
+/* ---------------- 底部导航（4 等宽页签）---------------- */
 .tabbar {
   position: fixed;
   bottom: 0; left: 50%; transform: translateX(-50%);
@@ -117,7 +117,7 @@ body {
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
-  grid-template-columns: 1fr auto 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
   background: rgba(255, 253, 249, 0.92);
   backdrop-filter: blur(16px);
@@ -137,18 +137,23 @@ body {
 .tab .tab-ic { transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
 .tab.active { color: var(--accent-deep); }
 .tab.active .tab-ic { transform: translateY(-1px) scale(1.08); }
-.tab-fab {
-  width: 52px; height: 52px;
-  margin: 0 10px;
+
+/* 悬浮建档按钮（右下角，子页面隐藏） */
+.fab {
+  position: fixed;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+  right: max(16px, calc(50vw - 280px + 16px));
+  width: 54px; height: 54px;
   border-radius: 50%;
   background: linear-gradient(145deg, #C68A4C, #8F5D2C);
   color: #FFF9EE;
   display: grid; place-items: center;
-  box-shadow: 0 6px 18px rgba(143, 93, 44, 0.38);
+  box-shadow: 0 6px 20px rgba(143, 93, 44, 0.42);
   text-decoration: none;
+  z-index: 45;
   transition: transform .2s cubic-bezier(.34,1.56,.64,1);
 }
-.tab-fab:active { transform: scale(0.92); }
+.fab:active { transform: scale(0.90) rotate(90deg); }
 
 /* ---------------- 页头 ---------------- */
 .page-head { margin: 6px 2px 14px; }
@@ -692,8 +697,55 @@ input[type="range"].rate::-moz-range-thumb {
 .chart-svg { width: 100%; height: auto; display: block; }
 
 /* ---------------- 子页面（详情/建档）---------------- */
-#app.sub .tabbar { display: none; }
+#app.sub .tabbar, #app.sub .fab { display: none; }
 #app.sub .view { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
+
+/* ---------------- 器具库 ---------------- */
+.eq-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--hairline);
+}
+.eq-item:last-child { border-bottom: none; }
+.eq-name { flex: 1; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-hint { font-size: 11px; color: var(--ink-3); }
+.eq-star {
+  border: none; background: none;
+  color: var(--ink-3);
+  font-size: 17px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: transform .15s, color .15s;
+}
+.eq-star.on { color: var(--accent); }
+.eq-star:active { transform: scale(1.25); }
+.eq-del {
+  border: none; background: none;
+  color: var(--ink-3);
+  font-size: 15px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.eq-add { display: flex; gap: 8px; margin-top: 12px; }
+.eq-add input {
+  flex: 1;
+  background: var(--card-2);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+  font-family: var(--sans);
+  color: var(--ink);
+}
+.eq-add input:focus { border-color: var(--accent); background: var(--card); }
+
+/* 流水里的冲煮参数行 */
+.tx-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.6; }
+
+/* 卡片删除手势 */
+.bean-card { touch-action: pan-y; }
+.bean-card.swiping { box-shadow: var(--shadow-pop); }
 
 /* ---------------- 通用 ---------------- */
 .mt-8 { margin-top: 8px; }

@@ -5,6 +5,7 @@ import * as stats from './views/stats.js';
 import * as settings from './views/settings.js';
 import * as add from './views/add.js';
 import * as detail from './views/detail.js';
+import * as equip from './views/equip.js';
 
 const view = document.getElementById('view');
 const app = document.getElementById('app');
@@ -13,6 +14,7 @@ const pageTitle = document.getElementById('page-title');
 const backBtn = document.getElementById('back-btn');
 
 /* #/            → 豆仓
+   #/equip       → 器具
    #/stats       → 统计
    #/settings    → 设置
    #/add         → 建档
@@ -22,6 +24,7 @@ function parseRoute() {
   const h = (location.hash || '#/').replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
   if (!parts.length) return { name: 'home', tab: 'home' };
+  if (parts[0] === 'equip') return { name: 'equip', tab: 'equip' };
   if (parts[0] === 'stats') return { name: 'stats', tab: 'stats' };
   if (parts[0] === 'settings') return { name: 'settings', tab: 'settings' };
   if (parts[0] === 'add') return { name: 'add', tab: 'home', sub: true, title: parts[1] ? '编辑档案' : '拍照建档', params: { id: parts[1] } };
@@ -54,6 +57,7 @@ async function router() {
     switch (r.name) {
       case 'stats': await stats.render(view); break;
       case 'settings': await settings.render(view); break;
+      case 'equip': await equip.render(view); break;
       case 'add': await add.render(view, r.params); break;
       case 'bean': await detail.render(view, r.params); break;
       default: await home.render(view);

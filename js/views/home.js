@@ -1,7 +1,7 @@
-/* 鉴豆 · 豆仓（首页）：今日开喝横幅 + 豆子卡片列表 + 归档 */
-import { db } from '../db.js';
+/* 鉴豆 · 豆仓（首页）：今日开喝横幅 + 豆子卡片列表 + 归档；长按/左滑删除 */
+import { db, deleteBeanDeep } from '../db.js';
 import { bannerBeans, sortBeans, statusOf, fmtG, esc } from '../util.js';
-import { photoURL } from '../ui.js';
+import { photoURL, toast, vibrate, confirmBox } from '../ui.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
@@ -78,7 +78,7 @@ async function drawList(beans, list, isArchived) {
     return `
     <a class="bean-card" href="#/bean/${b.id}">
       ${url ? `<img class="bean-thumb" src="${url}" alt="" loading="lazy"/>`
-            : `<div class="bean-thumb empty">鉴豆</div>`}
+            : `<img class="bean-thumb" src="icons/icon-192.png" alt="" loading="lazy"/>`}
       <div class="bean-main">
         <div class="bean-name">${esc(b.name || '未命名')}</div>
         <div class="bean-roaster">${esc([b.roaster, b.origin].filter(Boolean).join(' · ') || '—')}</div>
@@ -94,4 +94,69 @@ async function drawList(beans, list, isArchived) {
     </a>`;
   }));
   list.innerHTML = cards.join('');
+
+  /* 长按 / 左滑 删除手势 */
+  list.querySelectorAll('.bean-card').forEach((card, idx) => attachDelete(card, beans[idx]));
+}
+
+/* ---------------- 删除手势：长按（含右键）或左滑超过 64px ---------------- */
+function attachDelete(card, bean) {
+  let lpTimer = null, longFired = false, asking = false;
+  let sx = 0, sy = 0, dx = 0, swiping = false;
+
+  async function requestDelete() {
+    if (asking) return;
+    asking = true;
+    const yes = await confirmBox(`删除「${bean.name || '未命名'}」？`, '档案、冲煮流水与照片都会一并清除，无法恢复', { okText: '删除', danger: true });
+    asking = false;
+    if (!yes) { card.style.transform = ''; return; }
+    await deleteBeanDeep(bean);
+    vibrate(15);
+    toast('已删除');
+    render(document.getElementById('view'));
+  }
+
+  card.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; dx = 0;
+    longFired = false; swiping = false;
+    lpTimer = setTimeout(() => { longFired = true; vibrate(25); requestDelete(); }, 500);
+  }, { passive: true });
+
+  card.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    dx = t.clientX - sx;
+    const dy = t.clientY - sy;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearTimeout(lpTimer);
+    if (dx < -8 && Math.abs(dx) > Math.abs(dy)) {
+      swiping = true;
+      card.classList.add('swiping');
+      card.style.transition = 'none';
+      card.style.transform = `translateX(${Math.max(dx, -96)}px)`;
+    }
+  }, { passive: true });
+
+  const end = () => {
+    clearTimeout(lpTimer);
+    if (swiping) {
+      card.style.transition = 'transform .25s ease';
+      card.classList.remove('swiping');
+      card.style.transform = '';
+      if (dx < -64) { vibrate(20); requestDelete(); }
+    }
+  };
+  card.addEventListener('touchend', end);
+  card.addEventListener('touchcancel', end);
+
+  /* 桌面右键 = 安卓 Chrome 长按，同样触发 */
+  card.addEventListener('contextmenu', (e) => { e.preventDefault(); requestDelete(); });
+
+  /* 手势发生后拦截本次点击导航 */
+  card.addEventListener('click', (e) => {
+    if (longFired || swiping) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      longFired = false; swiping = false;
+    }
+  }, true);
 }
