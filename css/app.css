@@ -280,6 +280,7 @@ body {
   margin-bottom: 12px;
   filter: saturate(0.7);
 }
+.empty .empty-art:has(svg) { filter: none; }
 .empty h3 { font-family: var(--serif); color: var(--ink-2); font-size: 16px; margin-bottom: 6px; }
 .empty p { font-size: 13px; }
 

@@ -1,7 +1,7 @@
 /* 鉴豆 · 豆仓（首页）：今日开喝横幅 + 豆子卡片列表 + 归档；长按/左滑删除 */
 import { db, deleteBeanDeep } from '../db.js';
 import { bannerBeans, sortBeans, statusOf, fmtG, esc } from '../util.js';
-import { photoURL, toast, vibrate, confirmBox } from '../ui.js';
+import { photoURL, toast, vibrate, confirmBox, beanMark } from '../ui.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
@@ -23,7 +23,7 @@ export async function render(view) {
     const todayN = banner.today.length;
     html += `
     <a class="banner" href="#/bean/${bn[0].id}" style="display:block;">
-      <div class="banner-title">${todayN ? '🎉 今天开喝' : '🫘 已养好，等你开喝'}</div>
+      <div class="banner-title">${todayN ? '🎉 今天开喝' : `${beanMark(22)}<span>已养好，等你开喝</span>`}</div>
       <div class="banner-beans">${bn.slice(0, 4).map((b) => `<span class="banner-chip">${esc(b.name || '未命名')}</span>`).join('')}${bn.length > 4 ? `<span class="banner-chip">等 ${bn.length} 包</span>` : ''}</div>
     </a>`;
   }
@@ -32,7 +32,7 @@ export async function render(view) {
   if (!beans.length) {
     view.innerHTML = html + `
       <div class="empty">
-        <div class="empty-art">🫘</div>
+        <div class="empty-art">${beanMark(88)}</div>
         <h3>豆仓空空如也</h3>
         <p>拍一张包装袋照片，开始第一份豆子档案</p>
         <div class="mt-14"><a class="btn primary" href="#/add">拍照建档</a></div>

@@ -1,6 +1,27 @@
 /* 鉴豆 · 通用 UI：toast、底部弹层、确认框、图片查看、震动 */
 import { db } from './db.js';
 
+/* 咖啡豆 SVG 插画（与 App 图标同款造型），替代 emoji 避免安卓渲染成红豆 */
+let _bmSeq = 0;
+export function beanMark(size = 88) {
+  const g = 'bmg' + (++_bmSeq), f = 'bmf' + _bmSeq;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="flex-shrink:0;">
+  <defs>
+    <radialGradient id="${g}" cx="0.36" cy="0.30" r="1.0">
+      <stop offset="0" stop-color="#7E5636"/><stop offset="0.5" stop-color="#5C3D24"/><stop offset="1" stop-color="#3E2917"/>
+    </radialGradient>
+    <filter id="${f}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <ellipse cx="270" cy="400" rx="150" ry="30" fill="#3E2A1A" opacity="0.14" filter="url(#${f})"/>
+  <g transform="rotate(32 256 250)">
+    <ellipse cx="256" cy="250" rx="128" ry="168" fill="url(#${g})"/>
+    <ellipse cx="256" cy="250" rx="126" ry="166" fill="none" stroke="#2E1C0E" stroke-opacity="0.3" stroke-width="4"/>
+    <path d="M 172 158 C 196 118 244 100 292 110" fill="none" stroke="#EACD9F" stroke-opacity="0.4" stroke-width="20" stroke-linecap="round"/>
+    <path d="M 256 100 C 314 152 210 212 256 254 C 302 296 198 352 256 400" fill="none" stroke="#2A1808" stroke-opacity="0.2" stroke-width="34" stroke-linecap="round" transform="translate(4 5)"/>
+    <path d="M 256 100 C 314 152 210 212 256 254 C 302 296 198 352 256 400" fill="none" stroke="#F6EEDA" stroke-width="26" stroke-linecap="round"/>
+  </g></svg>`;
+}
+
 export function toast(msg, type = '') {
   const root = document.getElementById('toast-root');
   const t = document.createElement('div');
