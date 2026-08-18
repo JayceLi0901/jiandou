@@ -5,13 +5,14 @@ import { db } from './db.js';
 let _bmSeq = 0;
 export function beanMark(size = 88) {
   const s = ++_bmSeq;
-  const g = 'bmg' + s, f = 'bmf' + s, c = 'bmc' + s;
+  const g = 'bmg' + s, f = 'bmf' + s, m = 'bmm' + s, c = 'bmc' + s;
   return `<svg width="${size}" height="${size}" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="flex-shrink:0;">
   <defs>
     <radialGradient id="${g}" cx="0.36" cy="0.30" r="1.0">
       <stop offset="0" stop-color="#7E5636"/><stop offset="0.5" stop-color="#5C3D24"/><stop offset="1" stop-color="#3E2917"/>
     </radialGradient>
     <filter id="${f}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="${m}" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="8"/></filter>
     <clipPath id="${c}"><ellipse cx="256" cy="250" rx="128" ry="168"/></clipPath>
   </defs>
   <ellipse cx="288" cy="410" rx="134" ry="22" fill="#3E2A1A" opacity="0.15" filter="url(#${f})"/>
@@ -19,7 +20,7 @@ export function beanMark(size = 88) {
     <ellipse cx="256" cy="250" rx="128" ry="168" fill="url(#${g})"/>
     <g clip-path="url(#${c})">
       <ellipse cx="304" cy="316" rx="150" ry="192" fill="#241203" opacity="0.28" filter="url(#${f})"/>
-      <path d="M 172 158 C 196 118 244 100 292 110" fill="none" stroke="#EACD9F" stroke-opacity="0.38" stroke-width="18" stroke-linecap="round"/>
+      <path d="M 130 221 A 128 168 0 0 1 212 92" fill="none" stroke="#FFE9C4" stroke-opacity="0.30" stroke-width="16" stroke-linecap="round" filter="url(#${m})"/>
     </g>
     <path d="M 256 92 C 314 140 314 190 256 250 C 198 310 198 360 256 408" fill="none" stroke="#F6EEDA" stroke-width="26" stroke-linecap="round"/>
     <ellipse cx="256" cy="250" rx="127" ry="167" fill="none" stroke="#26150A" stroke-opacity="0.15" stroke-width="3"/>
