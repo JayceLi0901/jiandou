@@ -18,8 +18,8 @@
     <ellipse cx="256" cy="250" rx="128" ry="168" fill="url(#bean)"/>
     <ellipse cx="256" cy="250" rx="126" ry="166" fill="none" stroke="#2E1C0E" stroke-opacity="0.30" stroke-width="4"/>
     <path d="M 172 158 C 196 118 244 100 292 110" fill="none" stroke="#EACD9F" stroke-opacity="0.40" stroke-width="20" stroke-linecap="round"/>
-    <path d="M 256 100 C 314 152 210 212 256 254 C 302 296 198 352 256 400"
+    <path d="M 256 92 C 314 140 314 190 256 250 C 198 310 198 360 256 408"
           fill="none" stroke="#2A1808" stroke-opacity="0.20" stroke-width="34" stroke-linecap="round" transform="translate(4 5)"/>
-    <path d="M 256 100 C 314 152 210 212 256 254 C 302 296 198 352 256 400"
+    <path d="M 256 92 C 314 140 314 190 256 250 C 198 310 198 360 256 408"
           fill="none" stroke="url(#crease)" stroke-width="26" stroke-linecap="round"/>
   </g></svg>
