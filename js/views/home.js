@@ -76,51 +76,75 @@ async function drawList(beans, list, isArchived) {
       ? `养豆中 · 还差 ${st.daysToReady} 天`
       : st.key === 'finished' ? '已喝完' : st.label;
     return `
-    <a class="bean-card" href="#/bean/${b.id}">
-      ${url ? `<img class="bean-thumb" src="${url}" alt="" loading="lazy"/>`
-            : `<img class="bean-thumb" src="icons/icon-192.png" alt="" loading="lazy"/>`}
-      <div class="bean-main">
-        <div class="bean-name">${esc(b.name || '未命名')}</div>
-        <div class="bean-roaster">${esc([b.roaster, b.origin].filter(Boolean).join(' · ') || '—')}</div>
-        <div class="bean-meta">
-          <span class="badge ${st.cls}">${badge}</span>
-          <div class="bean-progress ${pct <= 20 ? 'low' : ''}"><i style="width:${pct}%"></i></div>
+    <div class="bean-wrap">
+      <button class="card-del" aria-label="删除">删除</button>
+      <a class="bean-card" href="#/bean/${b.id}">
+        ${url ? `<img class="bean-thumb" src="${url}" alt="" loading="lazy"/>`
+              : `<img class="bean-thumb" src="icons/icon-192.png" alt="" loading="lazy"/>`}
+        <div class="bean-main">
+          <div class="bean-name">${esc(b.name || '未命名')}</div>
+          <div class="bean-roaster">${esc([b.roaster, b.origin].filter(Boolean).join(' · ') || '—')}</div>
+          <div class="bean-meta">
+            <span class="badge ${st.cls}">${badge}</span>
+            <div class="bean-progress ${pct <= 20 ? 'low' : ''}"><i style="width:${pct}%"></i></div>
+          </div>
         </div>
-      </div>
-      <div class="bean-side">
-        <div class="bean-grams">${fmtG(Math.max(remain, 0))}<small>g</small></div>
-        <div class="bean-pct">剩 ${pct}%</div>
-      </div>
-    </a>`;
+        <div class="bean-side">
+          <div class="bean-grams">${fmtG(Math.max(remain, 0))}<small>g</small></div>
+          <div class="bean-pct">剩 ${pct}%</div>
+        </div>
+      </a>
+    </div>`;
   }));
   list.innerHTML = cards.join('');
 
-  /* 长按 / 左滑 删除手势 */
-  list.querySelectorAll('.bean-card').forEach((card, idx) => attachDelete(card, beans[idx]));
+  /* 左滑露出删除按钮 / 长按直接删 */
+  list.querySelectorAll('.bean-wrap').forEach((wrap, idx) => attachCard(wrap, beans[idx]));
 }
 
-/* ---------------- 删除手势：长按（含右键）或左滑超过 64px ---------------- */
-function attachDelete(card, bean) {
-  let lpTimer = null, longFired = false, asking = false;
-  let sx = 0, sy = 0, dx = 0, swiping = false;
+/* ---------------- 卡片手势：左滑露出「删除」按钮，点击按钮确认删除 ---------------- */
+let openWrap = null;
+
+function setOpen(wrap, open) {
+  const card = wrap.querySelector('.bean-card');
+  card.style.transition = 'transform .28s cubic-bezier(.32,.72,.33,1)';
+  card.style.transform = open ? 'translateX(-80px)' : '';
+}
+
+function closeOpenWrap() {
+  if (openWrap) { setOpen(openWrap, false); openWrap = null; }
+}
+
+function attachCard(wrap, bean) {
+  const card = wrap.querySelector('.bean-card');
+  const delBtn = wrap.querySelector('.card-del');
+  let sx = 0, sy = 0, base = 0, dx = 0;
+  let swiping = false, longFired = false, lpTimer = null, asking = false;
 
   async function requestDelete() {
     if (asking) return;
     asking = true;
     const yes = await confirmBox(`删除「${bean.name || '未命名'}」？`, '档案、冲煮流水与照片都会一并清除，无法恢复', { okText: '删除', danger: true });
     asking = false;
-    if (!yes) { card.style.transform = ''; return; }
+    if (!yes) { closeOpenWrap(); return; }
     await deleteBeanDeep(bean);
     vibrate(15);
     toast('已删除');
     render(document.getElementById('view'));
   }
 
+  delBtn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    vibrate(12);
+    requestDelete();
+  });
+
   card.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
     sx = t.clientX; sy = t.clientY; dx = 0;
-    longFired = false; swiping = false;
+    base = openWrap === wrap ? -80 : 0;
+    swiping = false; longFired = false;
     lpTimer = setTimeout(() => { longFired = true; vibrate(25); requestDelete(); }, 500);
   }, { passive: true });
 
@@ -129,33 +153,40 @@ function attachDelete(card, bean) {
     dx = t.clientX - sx;
     const dy = t.clientY - sy;
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearTimeout(lpTimer);
-    if (dx < -8 && Math.abs(dx) > Math.abs(dy)) {
+    if (Math.abs(dx) > Math.abs(dy) && (dx < 0 || base < 0)) {
       swiping = true;
-      card.classList.add('swiping');
       card.style.transition = 'none';
-      card.style.transform = `translateX(${Math.max(dx, -96)}px)`;
+      card.style.transform = `translateX(${Math.min(0, Math.max(-84, base + dx))}px)`;
     }
   }, { passive: true });
 
   const end = () => {
     clearTimeout(lpTimer);
     if (swiping) {
-      card.style.transition = 'transform .25s ease';
-      card.classList.remove('swiping');
-      card.style.transform = '';
-      if (dx < -64) { vibrate(20); requestDelete(); }
+      const open = base + dx < -40;
+      if (open) {
+        if (openWrap && openWrap !== wrap) closeOpenWrap();
+        openWrap = wrap;
+        setOpen(wrap, true);
+        vibrate(8);
+      } else {
+        if (openWrap === wrap) openWrap = null;
+        setOpen(wrap, false);
+      }
     }
+    swiping = false;
   };
   card.addEventListener('touchend', end);
   card.addEventListener('touchcancel', end);
 
-  /* 桌面右键 = 安卓 Chrome 长按，同样触发 */
+  /* 桌面右键 = 安卓长按，直接确认删除 */
   card.addEventListener('contextmenu', (e) => { e.preventDefault(); requestDelete(); });
 
-  /* 手势发生后拦截本次点击导航 */
+  /* 展开状态点卡片 = 收起不跳转；手势后拦截导航 */
   card.addEventListener('click', (e) => {
-    if (longFired || swiping) {
+    if (longFired || swiping || openWrap === wrap) {
       e.preventDefault(); e.stopImmediatePropagation();
+      if (openWrap === wrap) closeOpenWrap();
       longFired = false; swiping = false;
     }
   }, true);

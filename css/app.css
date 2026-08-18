@@ -747,6 +747,87 @@ input[type="range"].rate::-moz-range-thumb {
 .bean-card { touch-action: pan-y; }
 .bean-card.swiping { box-shadow: var(--shadow-pop); }
 
+/* ---------------- 日期选择器 ---------------- */
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.dp-nav {
+  width: 40px; height: 40px;
+  border: none; background: transparent;
+  border-radius: 12px;
+  font-size: 22px; color: var(--ink-2);
+  cursor: pointer; line-height: 1;
+}
+.dp-nav:active { background: var(--accent-ghost); }
+.dp-title {
+  flex: 1;
+  border: none; background: transparent;
+  font-family: var(--serif);
+  font-size: 17px; font-weight: 700; color: var(--ink);
+  cursor: pointer;
+  padding: 6px 0;
+}
+.dp-week {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.dp-week span { text-align: center; font-size: 11.5px; color: var(--ink-3); padding: 4px 0; }
+.dp-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.dp-d {
+  aspect-ratio: 1;
+  border: none; background: transparent;
+  border-radius: 50%;
+  font-size: 14.5px; color: var(--ink);
+  font-family: var(--sans);
+  cursor: pointer;
+  display: grid; place-items: center;
+  position: relative;
+  transition: background .15s, color .15s;
+}
+.dp-d:active { background: var(--accent-ghost); }
+.dp-d.sel { background: linear-gradient(145deg, #C68A4C, #8F5D2C); color: #FFF9EE; font-weight: 700; }
+.dp-d.today::after {
+  content: "";
+  position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent);
+}
+.dp-d.sel.today::after { background: #FFF9EE; }
+.dp-d.dis { color: var(--ink-3); opacity: 0.35; pointer-events: none; }
+.dp-months {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.dp-m {
+  padding: 14px 0;
+  border: none; background: var(--card-2);
+  border-radius: var(--radius-md);
+  font-size: 14.5px; color: var(--ink-2);
+  cursor: pointer;
+}
+.dp-m.on { background: var(--accent-ghost); color: var(--accent-deep); font-weight: 700; }
+.dp-m:active { background: var(--accent-ghost); }
+
+/* ---------------- 卡片左滑删除按钮 ---------------- */
+.bean-wrap { position: relative; margin-bottom: 11px; }
+.bean-wrap .bean-card { margin-bottom: 0; }
+.card-del {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: 76px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(150deg, #C4603F, #A8452F);
+  color: #FFF6F0;
+  font-size: 14px; font-weight: 600;
+  font-family: var(--sans);
+  letter-spacing: 0.1em;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: -4px 0 14px rgba(168, 69, 47, 0.25);
+}
+
 /* ---------------- 通用 ---------------- */
 .mt-8 { margin-top: 8px; }
 .mt-14 { margin-top: 14px; }

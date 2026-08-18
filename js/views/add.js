@@ -1,6 +1,7 @@
 /* 鉴豆 · 建档流程：拍照/选图 → OCR 识别预填 → 表单确认 → 保存 */
 import { db, deleteBeanDeep } from '../db.js';
 import { recognize } from '../ocr.js';
+import { datePickerSheet } from '../datepick.js';
 import { uid, todayStr, compressImage, esc } from '../util.js';
 import { toast, vibrate, confirmBox } from '../ui.js';
 
@@ -61,7 +62,7 @@ export async function render(view, params) {
           <input type="text" data-f="process" placeholder="如：日晒" maxlength="20" list="dl-process"/>
           <datalist id="dl-process">${PROCESSES.map((v) => `<option value="${v}"/>`).join('')}</datalist></div>
         <div class="field"><label>烘焙日期</label>
-          <input type="date" data-f="roastDate" max="${todayStr()}"/></div>
+          <input type="text" data-f="roastDate" readonly placeholder="点选日期 📅" style="cursor:pointer;"/></div>
       </div>
       <div class="field"><label>风味描述</label>
         <textarea data-f="flavors" placeholder="如：茉莉、柑橘、蜂蜜、红茶尾韵" maxlength="120"></textarea></div>
@@ -100,6 +101,13 @@ export async function render(view, params) {
       if (blob) { img.src = URL.createObjectURL(blob); img.hidden = false; $('#photo-empty').hidden = true; box.classList.add('has'); }
     }
   }
+
+  /* 烘焙日期：应用内日历（点标题年月可直达任意月份） */
+  $('[data-f="roastDate"]').addEventListener('click', async () => {
+    const el = $('[data-f="roastDate"]');
+    const v = await datePickerSheet({ value: el.value, title: '烘焙日期', clearable: true });
+    if (v !== null) el.value = v;
+  });
 
   /* 养豆天数分段 */
   const seg = $('#rest-seg'), customWrap = $('#rest-custom-wrap'), customInput = $('#rest-custom');

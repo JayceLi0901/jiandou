@@ -35,6 +35,8 @@ function parseRoute() {
 async function router() {
   const r = parseRoute();
   revokePhotoUrls();
+  /* 路由切换时清理可能残留的弹层/遮罩 */
+  document.getElementById('sheet-root').innerHTML = '';
 
   /* 底栏高亮 */
   document.querySelectorAll('.tab').forEach((t) => {
@@ -75,6 +77,11 @@ backBtn.addEventListener('click', () => {
 
 window.addEventListener('hashchange', router);
 router();
+
+/* 申请持久存储：防止安卓在磁盘紧张时自动清理本地档案 */
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
 
 /* Service Worker（离线缓存） */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

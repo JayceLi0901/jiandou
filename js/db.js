@@ -19,7 +19,13 @@ const ready = new Promise((resolve, reject) => {
     if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
     if (!db.objectStoreNames.contains('equip')) db.createObjectStore('equip', { keyPath: 'id' });
   };
-  req.onsuccess = () => resolve(req.result);
+  req.onsuccess = () => {
+    const db = req.result;
+    /* 新版本需要升级数据库时，主动断开旧连接，避免升级卡死导致"数据消失"的假象 */
+    db.onversionchange = () => db.close();
+    resolve(db);
+  };
+  req.onblocked = () => console.warn('[鉴豆] 数据库升级被占用，请关闭其他打开的鉴豆窗口后重试');
   req.onerror = () => reject(req.error);
 });
 

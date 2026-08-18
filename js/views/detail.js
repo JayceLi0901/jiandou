@@ -1,5 +1,6 @@
 /* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
 import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
+import { datePickerSheet } from '../datepick.js';
 import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, daysBetween, todayStr, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
@@ -250,7 +251,7 @@ async function brewSheet(bean) {
       <div class="field"><label>克数（g）*</label>
         <input type="number" id="brew-g" inputmode="decimal" min="0.1" step="0.1" value="15"/></div>
       <div class="field"><label>日期</label>
-        <input type="date" id="brew-date" value="${todayStr()}" max="${todayStr()}"/></div>
+        <input type="text" id="brew-date" readonly value="${todayStr()}" style="cursor:pointer;"/></div>
     </div>
 
     <div class="field-row">
@@ -302,6 +303,13 @@ async function brewSheet(bean) {
       const gEl = el.querySelector('#brew-g');
       const ratioSel = el.querySelector('#brew-ratio');
       const waterEl = el.querySelector('#brew-water');
+
+      /* 冲煮日期：应用内日历 */
+      const dateEl = el.querySelector('#brew-date');
+      dateEl.addEventListener('click', async () => {
+        const v = await datePickerSheet({ value: dateEl.value, title: '冲煮日期' });
+        if (v) dateEl.value = v;
+      });
 
       /* 水量自动按 粉量 × 粉水比 计算，手动改过则尊重手输 */
       let waterDirty = false;
@@ -414,7 +422,7 @@ function shareSheet(bean) {
       <div class="field"><label>克数（g）*</label>
         <input type="number" id="share-g" inputmode="decimal" min="0.1" step="0.1" value="100"/></div>
       <div class="field"><label>日期</label>
-        <input type="date" id="share-date" value="${todayStr()}" max="${todayStr()}"/></div>
+        <input type="text" id="share-date" readonly value="${todayStr()}" style="cursor:pointer;"/></div>
     </div>
     <div class="field"><label>备注（选填）</label>
       <input type="text" id="share-note" placeholder="送给哪位咖友？想留句话？"/></div>
@@ -431,6 +439,11 @@ function shareSheet(bean) {
         };
       });
       el.querySelector('.quick-pill').classList.add('on');
+      const dateEl = el.querySelector('#share-date');
+      dateEl.addEventListener('click', async () => {
+        const v = await datePickerSheet({ value: dateEl.value, title: '分豆日期' });
+        if (v) dateEl.value = v;
+      });
       el.querySelector('#share-save').onclick = async () => {
         const g = parseFloat(el.querySelector('#share-g').value);
         if (!(g > 0)) { toast('请输入有效克数', 'err'); return; }

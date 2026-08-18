@@ -8,6 +8,8 @@ export async function render(view) {
   const apiKey = await db.settings.get('apiKey', '');
   const apiBase = await db.settings.get('apiBase', 'https://open.bigmodel.cn/api/paas/v4');
   const model = await db.settings.get('model', 'glm-4v-flash');
+  const beanCount = (await db.beans.all()).length;
+  const txCount = (await db.txs.all()).length;
 
   view.innerHTML = `
     <div class="page-head">
@@ -63,7 +65,8 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.1.0</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.2.0</span></div>
+        <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
       </div>
