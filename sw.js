@@ -1,5 +1,5 @@
 /* 鉴豆 Service Worker — 离线缓存 */
-const VERSION = 'jiandou-v1.2.2';
+const VERSION = 'jiandou-v1.3.0';
 
 const PRECACHE = [
   './',
@@ -22,7 +22,9 @@ const PRECACHE = [
   './js/views/settings.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable-512.png'
+  './icons/icon-maskable-512.png',
+  './vendor/fonts/playfair-600.woff2',
+  './vendor/fonts/playfair-700.woff2'
 ];
 
 self.addEventListener('install', (e) => {
