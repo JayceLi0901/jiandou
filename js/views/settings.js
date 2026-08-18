@@ -65,7 +65,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.2.1</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.2.2</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
