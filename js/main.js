@@ -1,6 +1,7 @@
 /* 鉴豆 · 入口：hash 路由 + 顶栏/底栏状态 + Service Worker */
 import { revokePhotoUrls } from './ui.js';
-import { mirrorSnapshot } from './backup.js';
+import { db } from './db.js';
+import { mirrorSnapshot, exportBackup } from './backup.js';
 import * as home from './views/home.js';
 import * as stats from './views/stats.js';
 import * as settings from './views/settings.js';
@@ -80,7 +81,18 @@ backBtn.addEventListener('click', () => {
 });
 
 window.addEventListener('hashchange', router);
-router();
+router().then(async () => {
+  /* 每月首次打开：自动导出一份备份到手机下载目录（浏览器清缓存删不掉，防误清） */
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const last = await db.settings.get('autoBackupMonth', '');
+    if (last < month) {
+      await db.settings.set('autoBackupMonth', month);
+      const beans = await db.beans.all();
+      if (beans.length) setTimeout(() => exportBackup(), 1500);
+    }
+  } catch (_) {}
+});
 
 /* 申请持久存储：防止安卓在磁盘紧张时自动清理本地档案 */
 if (navigator.storage && navigator.storage.persist) {
