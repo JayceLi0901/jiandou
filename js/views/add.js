@@ -6,7 +6,6 @@ import { uid, todayStr, compressImage, esc } from '../util.js';
 import { toast, vibrate, confirmBox } from '../ui.js';
 
 const VARIETIES = ['瑰夏', '铁皮卡', '波旁', '尖身波旁', '卡杜拉', '卡杜艾', '帕卡马拉', '帕卡斯', '新世界', '摩卡', '象豆', '原生种', 'SL28', 'SL34', '74110', '74158', '希爪', 'Sidra', 'Java', 'Parainema'];
-const PROCESSES = ['水洗', '日晒', '蜜处理', '厌氧发酵', '厌氧日晒', '厌氧水洗', '湿刨法', '半水洗', '二氧化碳浸渍', '酒桶发酵', '红酒处理'];
 
 const REST_PRESETS = [15, 30, 45];
 
@@ -59,8 +58,7 @@ export async function render(view, params) {
       </div>
       <div class="field-row">
         <div class="field"><label>处理法</label>
-          <input type="text" data-f="process" placeholder="如：日晒" maxlength="20" list="dl-process"/>
-          <datalist id="dl-process">${PROCESSES.map((v) => `<option value="${v}"/>`).join('')}</datalist></div>
+          <input type="text" data-f="process" placeholder="自由输入，如 厌氧日晒" maxlength="20"/></div>
         <div class="field"><label>烘焙日期</label>
           <input type="text" data-f="roastDate" readonly placeholder="点选日期 📅" style="cursor:pointer;"/></div>
       </div>

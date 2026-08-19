@@ -766,6 +766,16 @@ input[type="range"].rate::-moz-range-thumb {
 
 /* 流水里的冲煮参数行 */
 .tx-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.6; }
+.tx-edit {
+  border: none; background: none;
+  color: var(--ink-3);
+  font-size: 14px;
+  padding: 4px 4px 4px 10px;
+  cursor: pointer;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+.tx-edit:active { color: var(--accent-deep); }
 
 /* 卡片删除手势 */
 .bean-card { touch-action: pan-y; }
@@ -836,9 +846,10 @@ input[type="range"].rate::-moz-range-thumb {
 
 /* ---------------- 卡片左滑删除按钮 ---------------- */
 .bean-wrap { position: relative; margin-bottom: 11px; }
-.bean-wrap .bean-card { margin-bottom: 0; }
+.bean-wrap .bean-card { margin-bottom: 0; position: relative; z-index: 1; background: var(--card); }
 .card-del {
   position: absolute; right: 0; top: 0; bottom: 0;
+  z-index: 0;
   width: 76px;
   border: none;
   border-radius: var(--radius-lg);

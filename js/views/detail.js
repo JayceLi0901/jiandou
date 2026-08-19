@@ -1,7 +1,7 @@
 /* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
 import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
 import { datePickerSheet } from '../datepick.js';
-import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, daysBetween, todayStr, esc, uid } from '../util.js';
+import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
 
@@ -107,7 +107,7 @@ async function draw(view, full) {
     </div>
 
     <div class="card">
-      <div class="card-title">流水记录<b>${txs.length} 笔</b></div>
+      <div class="card-title">流水记录<b>${txs.length}</b></div>
       <div id="tx-list">${txListHtml(txs) || '<div class="muted" style="padding:14px 0;">还没有流水，冲煮或分豆后会记录在这里</div>'}</div>
     </div>
 
@@ -136,6 +136,17 @@ async function draw(view, full) {
     location.hash = '#/';
   };
   $('#act-del')?.addEventListener('click', del);
+  /* 编辑历史流水 */
+  view.querySelectorAll('.tx-edit').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tx = txs.find((t) => t.id === btn.dataset.id);
+      if (!tx) return;
+      if (tx.type === 'brew') brewSheet(bean, tx);
+      else if (tx.type === 'share') shareSheet(bean, tx);
+      else adjustSheet(bean, tx);
+    });
+  });
+
   /* 归档 / 恢复 */
   $('#act-archive')?.addEventListener('click', async () => {
     const yes = await confirmBox('归档这包豆子？', '归档后从「在喝」列表移除，档案与流水保留，随时可恢复');
@@ -154,13 +165,14 @@ async function draw(view, full) {
 }
 
 /* ---------------- 流水列表 ---------------- */
-/* 冲煮参数与器具汇总成一行小字：92°C · 1:15 · 270g 水 · C40 24格 · V60 */
+/* 冲煮参数与器具汇总成一行小字：92°C · 1:15 · 270g 水 · 2'30" · C40 24格 · V60 */
 function metaOf(t) {
   const meta = [];
   if (t.params) {
     if (t.params.temp != null) meta.push(t.params.temp + '°C');
     if (t.params.ratio) meta.push('1:' + t.params.ratio);
     if (t.params.water != null) meta.push(fmtG(t.params.water) + 'g 水');
+    if (t.params.duration != null) meta.push(fmtDuration(t.params.duration));
     if (t.params.grind) meta.push(t.params.grind);
   }
   if (t.equip) for (const v of Object.values(t.equip)) if (v) meta.push(v);
@@ -196,6 +208,7 @@ function txListHtml(txs) {
         ${t.note ? `<div class="tx-note">${esc(t.note)}</div>` : ''}
         ${ratingHtml}
       </div>
+      <button class="tx-edit" data-id="${t.id}" aria-label="编辑此记录">✎</button>
     </div>`;
   }).join('');
 }
@@ -236,38 +249,44 @@ function promptNewEquip(catLabel) {
   });
 }
 
-async function brewSheet(bean) {
+async function brewSheet(bean, editTx = null) {
   const items = await db.equip.all();
   const lastEquip = (await db.settings.get('lastEquip', {})) || {};
   const lastParams = (await db.settings.get('lastParams', {})) || {};
+  const P = editTx && editTx.params ? editTx.params : null;
+  const durStr = P && P.duration != null
+    ? (Math.floor(P.duration / 60) ? `${Math.floor(P.duration / 60)}:${String(P.duration % 60).padStart(2, '0')}` : String(P.duration))
+    : '';
 
   const html = `
     <div class="quick-row">
+      <button class="quick-pill" data-g="10">10g</button>
+      <button class="quick-pill" data-g="12">12g</button>
       <button class="quick-pill" data-g="15">15g</button>
-      <button class="quick-pill" data-g="18">18g</button>
-      <button class="quick-pill" data-g="20">20g</button>
     </div>
     <div class="field-row">
       <div class="field"><label>克数（g）*</label>
-        <input type="number" id="brew-g" inputmode="decimal" min="0.1" step="0.1" value="15"/></div>
+        <input type="number" id="brew-g" inputmode="decimal" min="0.1" step="0.1" value="${editTx ? editTx.grams : 15}"/></div>
       <div class="field"><label>日期</label>
-        <input type="text" id="brew-date" readonly value="${todayStr()}" style="cursor:pointer;"/></div>
+        <input type="text" id="brew-date" readonly value="${editTx ? editTx.date : todayStr()}" style="cursor:pointer;"/></div>
     </div>
 
     <div class="field-row">
       <div class="field"><label>水温 ℃</label>
-        <input type="number" id="brew-temp" inputmode="decimal" min="0" max="100" step="0.5" value="${lastParams.temp ?? 92}"/></div>
+        <input type="number" id="brew-temp" inputmode="decimal" min="0" max="100" step="0.5" value="${P ? (P.temp ?? 92) : (lastParams.temp ?? 92)}"/></div>
       <div class="field"><label>粉水比</label>
         <select id="brew-ratio">
-          ${[13, 14, 15, 16, 17].map((r) => `<option value="${r}"${Number(lastParams.ratio ?? 15) === r ? ' selected' : ''}>1:${r}</option>`).join('')}
+          ${[13, 14, 15, 16, 17].map((r) => `<option value="${r}"${Number(P ? (P.ratio ?? 15) : (lastParams.ratio ?? 15)) === r ? ' selected' : ''}>1:${r}</option>`).join('')}
         </select></div>
     </div>
     <div class="field-row">
       <div class="field"><label>水量 g（自动按比例）</label>
-        <input type="number" id="brew-water" inputmode="decimal" min="0" step="1" value=""/></div>
-      <div class="field"><label>研磨度</label>
-        <input type="text" id="brew-grind" placeholder="如 C40 24格" maxlength="20" value="${esc(lastParams.grind || '')}"/></div>
+        <input type="number" id="brew-water" inputmode="decimal" min="0" step="1" value="${P && P.water != null ? P.water : ''}"/></div>
+      <div class="field"><label>冲煮时长</label>
+        <input type="text" id="brew-dur" placeholder="如 2:30 或 150" maxlength="8" value="${durStr}"/></div>
     </div>
+    <div class="field"><label>研磨度</label>
+      <input type="text" id="brew-grind" placeholder="如 C40 24格" maxlength="20" value="${P ? (P.grind || '') : esc(lastParams.grind || '')}"/></div>
 
     <div class="field-row">
       <div class="field"><label>壶</label><select data-cat="kettle"></select></div>
@@ -278,8 +297,8 @@ async function brewSheet(bean) {
       <div class="field"><label>磨豆机</label><select data-cat="grinder"></select></div>
     </div>
 
-    <div class="field"><label>备注（选填）</label>
-      <input type="text" id="brew-note" placeholder="想说点什么都可以" maxlength="50"/></div>
+    <div class="field"><label>这一杯的感受（选填）</label>
+      <textarea id="brew-note" maxlength="200" placeholder="香气、口感、和上一次的对比…想说多少写多少">${esc(editTx ? (editTx.note || '') : '')}</textarea></div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 4px;">
       <span style="font-size:13.5px;color:var(--ink-2);">顺手打个分？</span>
@@ -297,7 +316,7 @@ async function brewSheet(bean) {
     <button class="btn primary block" id="brew-save">记录冲煮</button>`;
 
   sheet({
-    title: `☕ ${bean.name || '冲煮'}`,
+    title: editTx ? '✎ 编辑冲煮' : `☕ ${bean.name || '冲煮'}`,
     html,
     async onMount(el, close) {
       const gEl = el.querySelector('#brew-g');
@@ -311,8 +330,8 @@ async function brewSheet(bean) {
         if (v) dateEl.value = v;
       });
 
-      /* 水量自动按 粉量 × 粉水比 计算，手动改过则尊重手输 */
-      let waterDirty = false;
+      /* 水量自动按 粉量 × 粉水比 计算，手动改过或编辑回填则尊重手输 */
+      let waterDirty = !!(P && P.water != null);
       const syncWater = () => {
         if (waterDirty) return;
         const g = parseFloat(gEl.value) || 0;
@@ -327,7 +346,7 @@ async function brewSheet(bean) {
       const fillSelect = (sel, cat) => {
         const catItems = items.filter((i) => i.cat === cat);
         const def = catItems.find((i) => i.isDefault);
-        const pre = (def && def.name) || lastEquip[cat] || '';
+        const pre = (editTx && editTx.equip && editTx.equip[cat]) || (def && def.name) || lastEquip[cat] || '';
         sel.innerHTML = `<option value="">不记录</option>` +
           catItems.map((i) => `<option value="${esc(i.name)}">${esc(i.name)}</option>`).join('') +
           `<option value="__new__">＋ 新增…</option>`;
@@ -364,12 +383,23 @@ async function brewSheet(bean) {
       });
       el.querySelector('.quick-pill').classList.add('on');
 
-      /* 评分开关 */
+      /* 评分开关（编辑时回填已有评分） */
       const on = el.querySelector('#brew-rate-on');
       on.onchange = () => { el.querySelector('#brew-rates').hidden = !on.checked; };
       el.querySelectorAll('input[type="range"].rate').forEach((r) => {
         r.oninput = () => { el.querySelector('#rv-' + r.dataset.k).textContent = Number(r.value).toFixed(1); };
       });
+      if (editTx && editTx.rating) {
+        on.checked = true;
+        el.querySelector('#brew-rates').hidden = false;
+        el.querySelectorAll('input[type="range"].rate').forEach((r) => {
+          const v = editTx.rating[r.dataset.k];
+          if (v != null) {
+            r.value = v;
+            el.querySelector('#rv-' + r.dataset.k).textContent = Number(v).toFixed(1);
+          }
+        });
+      }
 
       /* 保存 */
       el.querySelector('#brew-save').onclick = async () => {
@@ -383,11 +413,30 @@ async function brewSheet(bean) {
           water: parseFloat(waterEl.value) || null,
           ratio: Number(ratioSel.value),
           grind: el.querySelector('#brew-grind').value.trim(),
+          duration: parseDuration(el.querySelector('#brew-dur').value),
         };
 
         const rating = on.checked ? {} : null;
         if (on.checked) {
           el.querySelectorAll('input[type="range"].rate').forEach((r) => { rating[r.dataset.k] = Number(r.value); });
+        }
+
+        const date = el.querySelector('#brew-date').value || todayStr();
+        const note = el.querySelector('#brew-note').value.trim();
+
+        /* 编辑：更新原记录并重算剩余克重 */
+        if (editTx) {
+          Object.assign(editTx, { grams: g, date, note, rating, equip, params });
+          await db.txs.put(editTx);
+          const all = await db.txs.byBean(bean.id);
+          bean.remainingWeight = calcRemaining(bean, all);
+          bean.updatedAt = Date.now();
+          await db.beans.put(bean);
+          vibrate(10);
+          toast('冲煮记录已更新 ✎', 'ok');
+          close();
+          rerender();
+          return;
         }
 
         if (g > (Number(bean.remainingWeight) || 0)) toast('注意：本次克数超过了剩余克重', 'err');
@@ -397,9 +446,7 @@ async function brewSheet(bean) {
 
         await addTx(bean.id, {
           type: 'brew', grams: g,
-          date: el.querySelector('#brew-date').value || todayStr(),
-          note: el.querySelector('#brew-note').value.trim(),
-          rating, equip, params,
+          date, note, rating, equip, params,
         });
         vibrate(10);
         toast(`冲煮 ${fmtG(g)}g 已记录 ☕`, 'ok');
@@ -410,8 +457,8 @@ async function brewSheet(bean) {
   });
 }
 
-/* ---------------- 分豆弹层 ---------------- */
-function shareSheet(bean) {
+/* ---------------- 分豆弹层（支持编辑） ---------------- */
+function shareSheet(bean, editTx = null) {
   const html = `
     <div class="quick-row">
       <button class="quick-pill" data-g="50">50g</button>
@@ -420,16 +467,16 @@ function shareSheet(bean) {
     </div>
     <div class="field-row">
       <div class="field"><label>克数（g）*</label>
-        <input type="number" id="share-g" inputmode="decimal" min="0.1" step="0.1" value="100"/></div>
+        <input type="number" id="share-g" inputmode="decimal" min="0.1" step="0.1" value="${editTx ? editTx.grams : 100}"/></div>
       <div class="field"><label>日期</label>
-        <input type="text" id="share-date" readonly value="${todayStr()}" style="cursor:pointer;"/></div>
+        <input type="text" id="share-date" readonly value="${editTx ? editTx.date : todayStr()}" style="cursor:pointer;"/></div>
     </div>
     <div class="field"><label>备注（选填）</label>
-      <input type="text" id="share-note" placeholder="送给哪位咖友？想留句话？"/></div>
-    <button class="btn primary block" id="share-save">分豆出库</button>`;
+      <textarea id="share-note" maxlength="120" placeholder="送给哪位咖友？想留句话？">${esc(editTx ? (editTx.note || '') : '')}</textarea></div>
+    <button class="btn primary block" id="share-save">${editTx ? '保存修改' : '分豆出库'}</button>`;
 
   sheet({
-    title: `🎁 ${bean.name || '分豆'}`,
+    title: editTx ? '✎ 编辑分豆' : `🎁 ${bean.name || '分豆'}`,
     html,
     onMount(el, close) {
       el.querySelectorAll('.quick-pill').forEach((p) => {
@@ -447,11 +494,21 @@ function shareSheet(bean) {
       el.querySelector('#share-save').onclick = async () => {
         const g = parseFloat(el.querySelector('#share-g').value);
         if (!(g > 0)) { toast('请输入有效克数', 'err'); return; }
-        await addTx(bean.id, {
-          type: 'share', grams: g,
-          date: el.querySelector('#share-date').value || todayStr(),
-          note: el.querySelector('#share-note').value.trim(),
-        });
+        const date = el.querySelector('#share-date').value || todayStr();
+        const note = el.querySelector('#share-note').value.trim();
+
+        if (editTx) {
+          Object.assign(editTx, { grams: g, date, note });
+          await db.txs.put(editTx);
+          const all = await db.txs.byBean(bean.id);
+          bean.remainingWeight = calcRemaining(bean, all);
+          await db.beans.put(bean);
+          toast('分豆记录已更新 ✎', 'ok');
+          close();
+          rerender();
+          return;
+        }
+        await addTx(bean.id, { type: 'share', grams: g, date, note });
         vibrate(10);
         toast(`已分出 ${fmtG(g)}g 🎁`, 'ok');
         close();
@@ -461,31 +518,55 @@ function shareSheet(bean) {
   });
 }
 
-/* ---------------- 修正弹层 ---------------- */
-function adjustSheet(bean) {
+/* ---------------- 修正弹层（支持编辑历史修正） ---------------- */
+function adjustSheet(bean, editTx = null) {
   const html = `
-    <div class="muted" style="text-align:center;margin-bottom:14px;">当前剩余 <b style="color:var(--ink);font-family:var(--serif);font-size:16px;">${fmtG(bean.remainingWeight)} g</b> · 称重后填入实际值</div>
-    <div class="field"><label>实际剩余克重（g）*</label>
-      <input type="number" id="adj-g" inputmode="decimal" min="0" max="10000" step="0.1" value="${bean.remainingWeight}"/></div>
+    ${editTx
+      ? `<div class="muted" style="text-align:center;margin-bottom:14px;">修改这笔修正记录的克重变化、日期或备注</div>`
+      : `<div class="muted" style="text-align:center;margin-bottom:14px;">当前剩余 <b style="color:var(--ink);font-family:var(--num);font-size:16px;">${fmtG(bean.remainingWeight)} g</b> · 称重后填入实际值</div>`}
+    <div class="field"><label>${editTx ? '克重变化（g，可正可负）*' : '实际剩余克重（g）*'}</label>
+      <input type="number" id="adj-g" inputmode="decimal" ${editTx ? '' : 'min="0"'} max="10000" step="0.1" value="${editTx ? editTx.grams : bean.remainingWeight}"/></div>
+    <div class="field"><label>日期</label>
+      <input type="text" id="adj-date" readonly value="${editTx ? editTx.date : todayStr()}" style="cursor:pointer;"/></div>
     <div class="field"><label>备注（选填）</label>
-      <input type="text" id="adj-note" placeholder="如：称重校准" maxlength="40"/></div>
-    <button class="btn primary block" id="adj-save">保存修正</button>`;
+      <input type="text" id="adj-note" placeholder="如：称重校准" maxlength="40" value="${esc(editTx ? (editTx.note || '') : '')}"/></div>
+    <button class="btn primary block" id="adj-save">${editTx ? '保存修改' : '保存修正'}</button>`;
 
   sheet({
-    title: '⚖️ 修正克重',
+    title: editTx ? '✎ 编辑修正' : '⚖️ 修正克重',
     html,
     onMount(el, close) {
+      const dateEl = el.querySelector('#adj-date');
+      dateEl.addEventListener('click', async () => {
+        const v = await datePickerSheet({ value: dateEl.value, title: '修正日期' });
+        if (v) dateEl.value = v;
+      });
       el.querySelector('#adj-save').onclick = async () => {
-        const target = parseFloat(el.querySelector('#adj-g').value);
-        if (isNaN(target) || target < 0) { toast('请输入有效克数', 'err'); return; }
-        const delta = Math.round((target - (Number(bean.remainingWeight) || 0)) * 10) / 10;
+        const val = parseFloat(el.querySelector('#adj-g').value);
+        const date = dateEl.value || todayStr();
+        const note = el.querySelector('#adj-note').value.trim();
+
+        if (editTx) {
+          if (isNaN(val)) { toast('请输入有效克数', 'err'); return; }
+          Object.assign(editTx, { grams: val, date, note: note || (val > 0 ? '补入' : '修正') });
+          await db.txs.put(editTx);
+          const all = await db.txs.byBean(bean.id);
+          bean.remainingWeight = calcRemaining(bean, all);
+          await db.beans.put(bean);
+          toast('修正记录已更新 ✎', 'ok');
+          close();
+          rerender();
+          return;
+        }
+        if (isNaN(val) || val < 0) { toast('请输入有效克数', 'err'); return; }
+        const delta = Math.round((val - (Number(bean.remainingWeight) || 0)) * 10) / 10;
         if (delta === 0) { toast('克重没有变化'); close(); return; }
         await addTx(bean.id, {
           type: 'adjust', grams: delta,
-          date: todayStr(),
-          note: el.querySelector('#adj-note').value.trim() || (delta > 0 ? '补入' : '修正'),
+          date,
+          note: note || (delta > 0 ? '补入' : '修正'),
         });
-        toast(`已修正为 ${fmtG(target)}g`, 'ok');
+        toast(`已修正为 ${fmtG(val)}g`, 'ok');
         close();
         rerender();
       };

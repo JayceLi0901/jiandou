@@ -44,6 +44,35 @@ export async function recognizeLocal(file, onStatus) {
   }
 }
 
+/* ---------- 大模型解析本地 OCR 文本（推荐路径：免费离线识别 + 智能 structured 提取） ---------- */
+export async function analyzeTextWithLLM(text, cfg, onStatus) {
+  const endpoint = cfg.apiBase.replace(/\/+$/, '') + '/chat/completions';
+  const prompt = `你是咖啡豆包装标签信息提取助手。下面是一段咖啡豆包装袋照片的 OCR 识别文本，可能杂乱、有噪音、字段混排。请结合咖啡领域知识理解并提取以下字段，严格输出 JSON（不要 markdown 代码块，识别不到的字段填 null，绝不编造）：{"name":"产品名","roaster":"烘焙商","origin":"产地(国家·产区)","estate":"庄园/处理厂","variety":"豆种","process":"处理法","roastDate":"YYYY-MM-DD 或 null","flavors":"风味描述，顿号分隔","totalWeight":克重数字或null}
+
+OCR 文本：
+${text.slice(0, 1500)}`;
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + cfg.apiKey,
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+    }),
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  let content = j?.choices?.[0]?.message?.content || '';
+  content = content.replace(/```(json)?/g, '').trim();
+  const m = content.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('返回无法解析');
+  return JSON.parse(m[0]);
+}
+
 /* ---------- 云端视觉大模型（预留） ---------- */
 export async function recognizeCloud(file, cfg, onStatus) {
   onStatus && onStatus('云端 AI 识别中…', null);
@@ -83,16 +112,27 @@ export async function recognizeCloud(file, cfg, onStatus) {
   return JSON.parse(m[0]);
 }
 
-/* ---------- 总入口 ---------- */
+/* ---------- 总入口 ----------
+   优先级：云端视觉（engine=cloud 且有 Key）
+         → 本地 OCR + 大模型解析（有 Key）
+         → 本地 OCR + 规则解析（无 Key，完全离线） */
 export async function recognize(file, engineCfg, onStatus) {
   if (engineCfg.engine === 'cloud' && engineCfg.apiKey) {
     try {
       return await recognizeCloud(file, engineCfg, onStatus);
     } catch (e) {
-    if (onStatus) onStatus('云端失败，已回退本地：' + e.message, null);
+      if (onStatus) onStatus('云端失败，已回退本地：' + e.message, null);
     }
   }
   const text = await recognizeLocal(file, onStatus);
+  if (engineCfg.apiKey) {
+    try {
+      if (onStatus) onStatus('识别完成，大模型解析字段中…', null);
+      return await analyzeTextWithLLM(text, engineCfg, onStatus);
+    } catch (e) {
+      if (onStatus) onStatus('大模型解析失败，使用内置规则：' + e.message, null);
+    }
+  }
   return parseLabel(text);
 }
 

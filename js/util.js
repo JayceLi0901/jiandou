@@ -30,6 +30,23 @@ export function fmtG(n) {
   return String(v);
 }
 
+/* 冲煮时长：'2:30' 或 '150' → 秒 */
+export function parseDuration(s) {
+  if (!s) return null;
+  const str = String(s).trim().replace(/[分'’]/g, ':').replace(/["”秒]/g, '');
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(str);
+  if (m) return (+m[1]) * 60 + (+m[2]);
+  const n = parseInt(str, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+/* 秒 → 2'30" 展示 */
+export function fmtDuration(sec) {
+  if (sec == null || sec === '') return '';
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return m ? `${m}'${String(s).padStart(2, '0')}"` : `${s}"`;
+}
+
 /* ---------- 日期 ---------- */
 export function todayStr() {
   const d = new Date();

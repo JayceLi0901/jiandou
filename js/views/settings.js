@@ -26,19 +26,21 @@ export async function render(view) {
         </div>
         <div class="muted" style="text-align:left;margin-top:10px;line-height:1.7;" id="engine-hint">
           ${engine === 'local'
-            ? '本地识别完全离线、免费。咖啡包装设计花哨时识别率有限，识别不准的字段请手动修正。'
-            : '使用视觉大模型识别，准确率更高。需要联网与 API Key，单次费用极低；失败时自动回退本地识别。'}
+            ? '本地离线拍照识别文字，再由大模型智能提取字段（在下方填入 API Key 即自动启用；未填 Key 时用内置规则解析）。'
+            : '照片直接交给视觉大模型识别，准确率最高；失败自动回退「本地识别 + 大模型解析」。'}
         </div>
 
-        <div id="cloud-cfg" ${engine === 'cloud' ? '' : 'hidden'} style="margin-top:14px;">
+        <div id="cloud-cfg" style="margin-top:14px;">
           <div class="field"><label>API 地址（OpenAI 兼容接口）</label>
             <input type="text" id="cfg-base" value="${apiBase}" placeholder="https://open.bigmodel.cn/api/paas/v4"/></div>
-          <div class="field"><label>模型</label>
-            <input type="text" id="cfg-model" value="${model}" placeholder="glm-4v-flash"/></div>
-          <div class="field"><label>API Key</label>
-            <input type="password" id="cfg-key" value="${apiKey}" placeholder="粘贴你的 Key（仅保存在本机）"/></div>
-          <button class="btn soft block sm" id="cfg-save">保存识别配置</button>
-          <div class="muted" style="margin-top:8px;">以智谱为例：open.bigmodel.cn 的 glm-4v-flash 模型目前免费</div>
+          <div class="field-row">
+            <div class="field"><label>模型</label>
+              <input type="text" id="cfg-model" value="${model}" placeholder="glm-4v-flash"/></div>
+            <div class="field"><label>API Key</label>
+              <input type="password" id="cfg-key" value="${apiKey}" placeholder="仅保存在本机"/></div>
+          </div>
+          <button class="btn soft block sm" id="cfg-save">保存配置</button>
+          <div class="muted" style="margin-top:8px;">智能解析与云端识别共用 · 智谱 open.bigmodel.cn 的 glm-4v-flash 目前免费</div>
         </div>
       </div>
     </div>
@@ -65,7 +67,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.3.3</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.4.0</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
@@ -81,10 +83,9 @@ export async function render(view) {
     const val = btn.dataset.e;
     await db.settings.set('engine', val);
     $('#engine-seg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
-    $('#cloud-cfg').hidden = val !== 'cloud';
     $('#engine-hint').textContent = val === 'local'
-      ? '本地识别完全离线、免费。咖啡包装设计花哨时识别率有限，识别不准的字段请手动修正。'
-      : '使用视觉大模型识别，准确率更高。需要联网与 API Key，单次费用极低；失败时自动回退本地识别。';
+      ? '本地离线拍照识别文字，再由大模型智能提取字段（在下方填入 API Key 即自动启用；未填 Key 时用内置规则解析）。'
+      : '照片直接交给视觉大模型识别，准确率最高；失败自动回退「本地识别 + 大模型解析」。';
     toast(val === 'cloud' ? '已切换到云端 AI 识别' : '已切换到本地离线识别', 'ok');
   });
 
