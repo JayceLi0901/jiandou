@@ -1,5 +1,6 @@
 /* 鉴豆 · 入口：hash 路由 + 顶栏/底栏状态 + Service Worker */
 import { revokePhotoUrls } from './ui.js';
+import { mirrorSnapshot } from './backup.js';
 import * as home from './views/home.js';
 import * as stats from './views/stats.js';
 import * as settings from './views/settings.js';
@@ -68,6 +69,9 @@ async function router() {
     view.innerHTML = `<div class="empty"><div class="empty-art">⚠️</div><h3>页面出错了</h3><p>${String(e.message || e).replace(/[<>]/g, '')}</p></div>`;
     console.error(e);
   }
+
+  /* 每次渲染后写一份镜像快照到 localStorage 保险箱 */
+  mirrorSnapshot().catch(() => {});
 }
 
 backBtn.addEventListener('click', () => {

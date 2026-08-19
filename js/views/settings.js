@@ -1,6 +1,6 @@
 /* 鉴豆 · 设置：识别引擎（本地/云端）、数据备份、关于 */
 import { db } from '../db.js';
-import { exportBackup, importBackup, wipeAll } from '../backup.js';
+import { exportBackup, importBackup, wipeAll, readMirror, restoreFromMirror } from '../backup.js';
 import { toast } from '../ui.js';
 
 export async function render(view) {
@@ -10,6 +10,9 @@ export async function render(view) {
   const model = await db.settings.get('model', 'glm-4v-flash');
   const beanCount = (await db.beans.all()).length;
   const txCount = (await db.txs.all()).length;
+  const lastBackupAt = await db.settings.get('lastBackupAt', null);
+  const bkDays = lastBackupAt ? Math.floor((Date.now() - lastBackupAt) / 86400000) : null;
+  const mirror = readMirror();
 
   view.innerHTML = `
     <div class="page-head">
@@ -47,6 +50,18 @@ export async function render(view) {
 
     <div class="set-group">
       <div class="group-label">数据（仅存本机）</div>
+      <div class="set-row solo" style="cursor:default;">
+        <div class="set-main"><div class="set-title">备份状态</div>
+          <div class="set-desc">${bkDays == null ? '从未导出过备份，强烈建议立即导出一份' : bkDays === 0 ? '今天刚导出过，很棒' : `${bkDays} 天前导出过${bkDays > 30 ? '，建议再导出一份' : ''}`}</div></div>
+      </div>
+      <div style="height:1px;background:var(--hairline);"></div>
+      ${mirror && mirror.beans && mirror.beans.length ? `
+      <div class="set-row solo" id="row-mirror" style="cursor:pointer;">
+        <div class="set-main"><div class="set-title">从本地镜像恢复</div>
+          <div class="set-desc">镜像保险箱：${mirror.beans.length} 份档案 · ${(mirror.txs || []).length} 笔流水（${new Date(mirror.t).toLocaleString('zh-CN')}）</div></div>
+        <span class="set-arrow">›</span>
+      </div>
+      <div style="height:1px;background:var(--hairline);"></div>` : ''}
       <div class="set-row solo" id="row-export" style="cursor:pointer;">
         <div class="set-main"><div class="set-title">导出备份</div><div class="set-desc">生成 JSON 备份文件，建议定期导出</div></div>
         <span class="set-arrow">›</span>
@@ -67,7 +82,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.4.0</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.4.1</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
@@ -97,6 +112,7 @@ export async function render(view) {
   });
 
   /* 备份 */
+  $('#row-mirror')?.addEventListener('click', restoreFromMirror);
   $('#row-export').addEventListener('click', exportBackup);
   $('#row-import').addEventListener('click', () => $('#import-input').click());
   $('#import-input').addEventListener('change', (e) => {

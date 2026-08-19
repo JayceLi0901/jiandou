@@ -1,6 +1,44 @@
-/* 鉴豆 · 数据备份：导出 / 导入 / 清空（数据仅存本机，请定期导出） */
+/* 鉴豆 · 数据备份：导出 / 导入 / 清空 + 本地镜像保险箱（数据仅存本机，请定期导出） */
 import { db } from './db.js';
 import { toast, confirmBox } from './ui.js';
+
+/* ---------- 本地镜像保险箱 ----------
+   每次页面渲染后把档案+流水快照写入 localStorage（不含照片，仅几 KB～几百 KB）。
+   若 IndexedDB 被系统清理/异常清空，下次打开可一键还原。 */
+const MIRROR_KEY = 'jiandou-mirror';
+
+export async function mirrorSnapshot() {
+  try {
+    const beans = await db.beans.all();
+    const txs = await db.txs.all();
+    const prev = readMirror();
+    /* 关键：绝不用空数据覆盖非空镜像（那正是数据丢失后需要救命的时刻） */
+    if (!beans.length && prev && prev.beans && prev.beans.length) return;
+    localStorage.setItem(MIRROR_KEY, JSON.stringify({ t: Date.now(), beans, txs }));
+  } catch (_) { /* 存储满等异常时静默跳过 */ }
+}
+
+export function readMirror() {
+  try { return JSON.parse(localStorage.getItem(MIRROR_KEY) || 'null'); }
+  catch (_) { return null; }
+}
+
+export async function restoreFromMirror() {
+  const m = readMirror();
+  if (!m || !m.beans || !m.beans.length) { toast('没有可恢复的镜像数据', 'err'); return false; }
+  const cur = await db.beans.all();
+  if (cur.length) {
+    const yes = await confirmBox('恢复镜像数据？',
+      `镜像含 ${m.beans.length} 份档案 · ${(m.txs || []).length} 笔流水（快照时间 ${new Date(m.t).toLocaleString('zh-CN')}），将与现有 ${cur.length} 份档案合并，同 ID 以镜像为准`);
+    if (!yes) return false;
+  }
+  for (const b of m.beans) await db.beans.put(b);
+  for (const t of m.txs || []) await db.txs.put(t);
+  toast(`已恢复 ${m.beans.length} 份档案 🛟`, 'ok');
+  location.hash = '#/';
+  setTimeout(() => location.reload(), 400);
+  return true;
+}
 
 const blobToDataURL = (blob) => new Promise((res, rej) => {
   const r = new FileReader();
@@ -43,6 +81,7 @@ export async function exportBackup() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  await db.settings.set('lastBackupAt', Date.now());
   toast(`已导出 ${beans.length} 份档案`, 'ok');
 }
 
@@ -92,6 +131,7 @@ export async function wipeAll() {
     await db.photos.del(b.photoId);
     await db.beans.del(b.id);
   }
+  localStorage.removeItem(MIRROR_KEY);
   toast('已清空');
   location.hash = '#/';
   setTimeout(() => location.reload(), 400);

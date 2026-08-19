@@ -2,6 +2,7 @@
 import { db, deleteBeanDeep } from '../db.js';
 import { bannerBeans, sortBeans, statusOf, fmtG, esc } from '../util.js';
 import { photoURL, toast, vibrate, confirmBox, beanMark } from '../ui.js';
+import { readMirror, restoreFromMirror } from '../backup.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
@@ -28,15 +29,25 @@ export async function render(view) {
     </a>`;
   }
 
-  /* 无豆子空状态 */
+  /* 无豆子空状态（若镜像保险箱有数据，提示一键恢复） */
   if (!beans.length) {
-    view.innerHTML = html + `
+    const mirror = readMirror();
+    const mirrorBanner = mirror && mirror.beans && mirror.beans.length ? `
+      <a class="banner" id="mirror-banner" style="display:block;cursor:pointer;">
+        <div class="banner-title">🛟 发现本地镜像数据</div>
+        <div class="banner-beans"><span class="banner-chip">${mirror.beans.length} 份档案 · ${(mirror.txs || []).length} 笔流水，点击立即恢复</span></div>
+      </a>` : '';
+    view.innerHTML = html + mirrorBanner + `
       <div class="empty">
         <div class="empty-art">${beanMark(88)}</div>
         <h3>豆仓空空如也</h3>
         <p>拍一张包装袋照片，开始第一份豆子档案</p>
         <div class="mt-14"><a class="btn primary" href="#/add">拍照建档</a></div>
       </div>`;
+    view.querySelector('#mirror-banner')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      restoreFromMirror();
+    });
     return;
   }
 
