@@ -1,0 +1,12 @@
+name = "jiandou-sync"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "部署时替换为你的KV命名空间ID"
+
+[vars]
+# ALLOW_ORIGINS = "https://jayceli0901.github.io"
+ALLOW_ORIGINS = "*"
+# ADMIN_TOKEN 通过 secret 配置：wrangler secret put ADMIN_TOKEN

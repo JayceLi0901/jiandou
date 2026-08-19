@@ -2,6 +2,7 @@
 import { revokePhotoUrls } from './ui.js';
 import { db } from './db.js';
 import { mirrorSnapshot, exportBackup } from './backup.js';
+import { getSession, pushData, pullData } from './sync.js';
 import * as home from './views/home.js';
 import * as stats from './views/stats.js';
 import * as settings from './views/settings.js';
@@ -92,6 +93,12 @@ router().then(async () => {
       if (beans.length) setTimeout(() => exportBackup(), 1500);
     }
   } catch (_) {}
+
+  /* 云同步：登录过则开屏静默「先拉后推」合并 */
+  const session = getSession();
+  if (session) {
+    pullData(session).then(() => pushData(session)).catch(() => {});
+  }
 });
 
 /* 申请持久存储：防止安卓在磁盘紧张时自动清理本地档案 */

@@ -1,6 +1,7 @@
 /* 鉴豆 · 数据备份：导出 / 导入 / 清空 + 本地镜像保险箱（数据仅存本机，请定期导出） */
 import { db } from './db.js';
 import { toast, confirmBox } from './ui.js';
+import { clearSession } from './sync.js';
 
 /* ---------- 本地镜像保险箱 ----------
    每次页面渲染后把档案+流水快照写入 localStorage（不含照片，仅几 KB～几百 KB）。
@@ -132,6 +133,7 @@ export async function wipeAll() {
     await db.beans.del(b.id);
   }
   localStorage.removeItem(MIRROR_KEY);
+  clearSession();
   toast('已清空');
   location.hash = '#/';
   setTimeout(() => location.reload(), 400);

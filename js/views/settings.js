@@ -1,7 +1,9 @@
 /* 鉴豆 · 设置：识别引擎（本地/云端）、数据备份、关于 */
 import { db } from '../db.js';
 import { exportBackup, importBackup, wipeAll, readMirror, restoreFromMirror } from '../backup.js';
-import { toast } from '../ui.js';
+import { getSession, registerAccount, loginAccount, pushData, pullData, clearSession } from '../sync.js';
+import { toast, confirmBox } from '../ui.js';
+import { esc } from '../util.js';
 
 export async function render(view) {
   const engine = await db.settings.get('engine', 'local');
@@ -13,6 +15,37 @@ export async function render(view) {
   const lastBackupAt = await db.settings.get('lastBackupAt', null);
   const bkDays = lastBackupAt ? Math.floor((Date.now() - lastBackupAt) / 86400000) : null;
   const mirror = readMirror();
+  const syncSession = getSession();
+  const cloudSyncedAt = await db.settings.get('cloudSyncedAt', null);
+
+  const syncHtml = syncSession ? `
+      <div class="card" style="margin-bottom:0;">
+        <div class="kv"><span class="k">账号</span><span class="v">${esc(syncSession.user)} @ ${esc(syncSession.server.replace(/^https?:\/\//, ''))}</span></div>
+        <div class="kv"><span class="k">上次同步</span><span class="v">${cloudSyncedAt ? new Date(cloudSyncedAt).toLocaleString('zh-CN') : '从未'}</span></div>
+        <div class="kv"><span class="k">加密</span><span class="v">端到端（服务器只见密文）</span></div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn primary sm" style="flex:1;" id="sync-now">立即同步</button>
+          <button class="btn ghost sm" style="flex:1;" id="sync-pull">从云端恢复</button>
+        </div>
+        <div class="mt-8"><button class="btn ghost sm block" id="sync-logout" style="color:var(--ink-3);border-color:var(--hairline);">退出登录</button></div>
+        <div class="muted" style="margin-top:10px;">每次打开 App 自动同步；照片仅存本机不参与云同步</div>
+      </div>` : `
+      <div class="card" style="margin-bottom:0;">
+        <div class="seg" id="sync-mode" style="margin-bottom:12px;">
+          <button data-m="reg" class="on">注册新账号</button>
+          <button data-m="login">登录</button>
+        </div>
+        <div class="field"><label>服务器地址</label>
+          <input type="text" id="sync-server" placeholder="https://你的同步域名" autocapitalize="off"/></div>
+        <div class="field"><label>用户名（3~20 位字母/数字/下划线）</label>
+          <input type="text" id="sync-user" placeholder="如 coffee_lee" autocapitalize="off" maxlength="20"/></div>
+        <div class="field"><label>密码（至少 6 位）</label>
+          <input type="password" id="sync-pass" placeholder="密码同时是加密钥匙，务必记牢" maxlength="64"/></div>
+        <div class="field" id="sync-pass2-field"><label>确认密码</label>
+          <input type="password" id="sync-pass2" placeholder="再输一次" maxlength="64"/></div>
+        <button class="btn primary block" id="sync-submit">注册并开启同步</button>
+        <div class="muted" style="margin-top:10px;">🔐 端到端加密：密码不离开手机，服务器只存密文。忘记密码 = 云端数据无法找回（本地不受影响）</div>
+      </div>`;
 
   view.innerHTML = `
     <div class="page-head">
@@ -49,6 +82,11 @@ export async function render(view) {
     </div>
 
     <div class="set-group">
+      <div class="group-label">云同步（端到端加密）</div>
+      ${syncHtml}
+    </div>
+
+    <div class="set-group">
       <div class="group-label">数据（仅存本机）</div>
       <div class="set-row solo" style="cursor:default;">
         <div class="set-main"><div class="set-title">备份状态</div>
@@ -82,7 +120,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.4.2</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.5.0</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
@@ -121,4 +159,67 @@ export async function render(view) {
     if (f) importBackup(f);
   });
   $('#row-wipe').addEventListener('click', wipeAll);
+
+  /* 云同步 */
+  if (syncSession) {
+    $('#sync-now')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true; btn.textContent = '同步中…';
+      try { await pushData(syncSession); toast('已同步到云端 ☁️', 'ok'); }
+      catch (err) { toast(err.message, 'err'); }
+      btn.disabled = false; btn.textContent = '立即同步';
+    });
+    $('#sync-pull')?.addEventListener('click', async () => {
+      const yes = await confirmBox('从云端恢复？', '云端数据将与本机合并（同 ID 档案以云端为准）');
+      if (!yes) return;
+      try {
+        const n = await pullData(syncSession);
+        toast(`已恢复 ${n} 份档案 ☁️`, 'ok');
+        location.hash = '#/';
+        setTimeout(() => location.reload(), 400);
+      } catch (err) { toast(err.message, 'err'); }
+    });
+    $('#sync-logout')?.addEventListener('click', async () => {
+      const yes = await confirmBox('退出云同步？', '本地数据保留，只是不再自动同步');
+      if (!yes) return;
+      clearSession();
+      toast('已退出');
+      render(view);
+    });
+  } else {
+    let mode = 'reg';
+    const segEl = $('#sync-mode');
+    segEl?.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      mode = b.dataset.m;
+      segEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      $('#sync-pass2-field').style.display = mode === 'reg' ? '' : 'none';
+      $('#sync-submit').textContent = mode === 'reg' ? '注册并开启同步' : '登录并开启同步';
+    });
+    $('#sync-submit')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true; btn.textContent = '处理中…';
+      try {
+        const server = $('#sync-server').value.trim();
+        const user = $('#sync-user').value.trim();
+        const pass = $('#sync-pass').value;
+        if (!server) throw new Error('请填写服务器地址');
+        let session;
+        if (mode === 'reg') {
+          if (pass !== $('#sync-pass2').value) throw new Error('两次密码不一致');
+          session = await registerAccount(server, user, pass);
+        } else {
+          session = await loginAccount(server, user, pass);
+        }
+        try { await pullData(session); await pushData(session); } catch (_) {}
+        toast(mode === 'reg' ? '注册成功，同步已开启 ☁️' : '登录成功，同步已开启 ☁️', 'ok');
+        render(view);
+      } catch (err) {
+        toast(err.message, 'err');
+        btn.disabled = false;
+        btn.textContent = mode === 'reg' ? '注册并开启同步' : '登录并开启同步';
+      }
+    });
+  }
 }
