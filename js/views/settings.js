@@ -36,7 +36,7 @@ export async function render(view) {
           <button data-m="login">登录</button>
         </div>
         <div class="field"><label>服务器地址</label>
-          <input type="text" id="sync-server" placeholder="https://你的同步域名" autocapitalize="off"/></div>
+          <input type="text" id="sync-server" placeholder="https://sync.waduhek.eu.org" autocapitalize="off"/></div>
         <div class="field"><label>用户名（3~20 位字母/数字/下划线）</label>
           <input type="text" id="sync-user" placeholder="如 coffee_lee" autocapitalize="off" maxlength="20"/></div>
         <div class="field"><label>密码（至少 6 位）</label>
