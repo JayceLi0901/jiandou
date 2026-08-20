@@ -118,8 +118,10 @@ let openWrap = null;
 
 function setOpen(wrap, open) {
   const card = wrap.querySelector('.bean-card');
-  card.style.transition = 'transform .28s cubic-bezier(.32,.72,.33,1)';
-  card.style.transform = open ? 'translateX(-80px)' : '';
+  card.style.transition = 'transform .32s cubic-bezier(.34,1.3,.5,1), box-shadow .3s ease';
+  /* 展开时豆子微微抬起、放大、倾斜 —— 从栏里「分离」出来的泡泡感 */
+  card.style.transform = open ? 'translateX(-78px) translateY(-3px) scale(1.045) rotate(-0.6deg)' : '';
+  card.classList.toggle('lifted', open);
 }
 
 function closeOpenWrap() {
@@ -138,10 +140,15 @@ function attachCard(wrap, bean) {
     const yes = await confirmBox(`删除「${bean.name || '未命名'}」？`, '档案、冲煮流水与照片都会一并清除，无法恢复', { okText: '删除', danger: true });
     asking = false;
     if (!yes) { closeOpenWrap(); return; }
-    await deleteBeanDeep(bean);
+    /* 泡泡上浮消散动画，再真正删除 */
     vibrate(15);
-    toast('已删除');
-    render(document.getElementById('view'));
+    card.classList.remove('lifted');
+    card.classList.add('bubble-out');
+    setTimeout(async () => {
+      await deleteBeanDeep(bean);
+      toast('已删除');
+      render(document.getElementById('view'));
+    }, 430);
   }
 
   delBtn.addEventListener('click', (e) => {
@@ -166,8 +173,11 @@ function attachCard(wrap, bean) {
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearTimeout(lpTimer);
     if (Math.abs(dx) > Math.abs(dy) && (dx < 0 || base < 0)) {
       swiping = true;
+      card.classList.add('lifted');
       card.style.transition = 'none';
-      card.style.transform = `translateX(${Math.min(0, Math.max(-84, base + dx))}px)`;
+      const off = Math.min(0, Math.max(-84, base + dx));
+      const lift = Math.min(1, -off / 80);
+      card.style.transform = `translateX(${off}px) translateY(${-3 * lift}px) scale(${1 + 0.045 * lift}) rotate(${-0.6 * lift}deg)`;
     }
   }, { passive: true });
 

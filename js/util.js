@@ -1,14 +1,38 @@
 /* 鉴豆 · 工具函数：日期、状态计算、格式化 */
 
+/* 评分维度：花香/果香/甜感/酸质 直接打分；Body 特殊（记录厚薄感，5=完美平衡）
+   「整体」不再手填，自动 = 五维得分平均 */
 export const RATING_DIMS = [
-  { key: 'floral',      label: '花香' },
-  { key: 'fruity',      label: '果香' },
-  { key: 'sweet',       label: '甜感' },
-  { key: 'acidity',     label: '酸质' },
-  { key: 'body',        label: 'Body' },
-  { key: 'aftertaste',  label: '余韵' },
-  { key: 'overall',     label: '整体' },
+  { key: 'floral',   label: '花香' },
+  { key: 'fruity',   label: '果香' },
+  { key: 'sweet',    label: '甜感' },
+  { key: 'acidity',  label: '酸质' },
+  { key: 'body',     label: 'Body', special: true },
 ];
+
+/* Body 计分：5 = 满分，偏薄/偏厚每 1 分扣 2 分 */
+export function bodyScore(raw) {
+  if (raw == null || raw === '') return null;
+  return Math.max(0, Math.round((10 - 2 * Math.abs(Number(raw) - 5)) * 10) / 10);
+}
+
+/* 单条评分 → 各维得分 + 自动整体（0 或空 = 不适用，跳过） */
+export function ratingScores(rating) {
+  const out = {};
+  const vals = [];
+  for (const d of RATING_DIMS) {
+    const v = Number(rating?.[d.key]);
+    if (d.special) {
+      out.body = bodyScore(rating?.body);
+      if (out.body != null && out.body > 0) vals.push(out.body);
+    } else {
+      out[d.key] = Number.isNaN(v) ? null : v;
+      if (!Number.isNaN(v) && v > 0) vals.push(v);
+    }
+  }
+  out.overall = vals.length ? Math.round((vals.reduce((s, x) => s + x, 0) / vals.length) * 10) / 10 : 0;
+  return out;
+}
 
 /* ---------- 基础 ---------- */
 export function uid() {
@@ -126,19 +150,26 @@ export function sortBeans(beans) {
   });
 }
 
-/* ---------- 评分 ---------- */
+/* ---------- 评分（多条平均；overall 为逐条自动整体的均值） ---------- */
 export function avgRatings(txs) {
-  const rated = txs.filter((t) => t.rating && t.rating.overall != null);
+  const rated = txs.filter((t) => t.rating);
   if (!rated.length) return null;
   const out = { _count: rated.length };
-  for (const d of RATING_DIMS) {
-    let sum = 0, n = 0;
-    for (const t of rated) {
-      const v = Number(t.rating[d.key]);
-      if (!Number.isNaN(v) && v > 0) { sum += v; n++; }
+  let overallSum = 0, overallN = 0;
+  for (const t of rated) {
+    const s = ratingScores(t.rating);
+    overallSum += s.overall; overallN++;
+    for (const d of RATING_DIMS) {
+      if (s[d.key] != null && s[d.key] > 0) {
+        out['_' + d.key] = (out['_' + d.key] || 0) + s[d.key];
+        out['_n' + d.key] = (out['_n' + d.key] || 0) + 1;
+      }
     }
-    out[d.key] = n ? Math.round((sum / n) * 10) / 10 : 0;
   }
+  for (const d of RATING_DIMS) {
+    out[d.key] = out['_n' + d.key] ? Math.round((out['_' + d.key] / out['_n' + d.key]) * 10) / 10 : 0;
+  }
+  out.overall = overallN ? Math.round((overallSum / overallN) * 10) / 10 : 0;
   return out;
 }
 

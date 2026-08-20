@@ -25,7 +25,11 @@ export async function render(view) {
 async function draw(body) {
   const items = await db.equip.all();
   body.innerHTML = CATS.map((cat) => {
-    const list = items.filter((i) => i.cat === cat.key);
+    /* 组内排序：★默认置顶，其余按录入时间正序（新增的排在栏目末尾） */
+    const list = items.filter((i) => i.cat === cat.key)
+      .sort((a, b) => ((b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+        || ((a.createdAt || 0) - (b.createdAt || 0))
+        || String(a.id).localeCompare(String(b.id)));
     const rows = list.length
       ? list.map((i) => `
         <div class="eq-item" data-id="${i.id}">
@@ -50,7 +54,7 @@ async function draw(body) {
     name = (name || '').trim();
     if (!name) { toast('请输入名称', 'err'); return; }
     const exist = items.filter((i) => i.cat === cat);
-    await db.equip.put({ id: uid(), cat, name, isDefault: exist.length === 0 });
+    await db.equip.put({ id: uid(), cat, name, isDefault: exist.length === 0, createdAt: Date.now() });
     vibrate();
     toast('已添加', 'ok');
     draw(body);

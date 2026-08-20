@@ -1,7 +1,7 @@
 /* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
 import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
 import { datePickerSheet } from '../datepick.js';
-import { statusOf, avgRatings, RATING_DIMS, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
+import { statusOf, avgRatings, RATING_DIMS, bodyScore, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
 
@@ -172,6 +172,7 @@ function metaOf(t) {
     if (t.params.temp != null) meta.push(t.params.temp + '°C');
     if (t.params.ratio) meta.push('1:' + t.params.ratio);
     if (t.params.water != null) meta.push(fmtG(t.params.water) + 'g 水');
+    if (t.params.bypass != null && t.params.bypass > 0) meta.push('bypass ' + fmtG(t.params.bypass) + 'g');
     if (t.params.duration != null) meta.push(fmtDuration(t.params.duration));
     if (t.params.grind) meta.push(t.params.grind);
   }
@@ -193,7 +194,7 @@ function txListHtml(txs) {
     const ratingHtml = t.rating ? `
       <div class="tx-rating">
         ${RATING_DIMS.filter((d) => t.rating[d.key] != null && t.rating[d.key] !== '')
-          .map((d) => `<span class="rate-tag">${d.label} <b>${t.rating[d.key]}</b></span>`).join('')}
+          .map((d) => `<span class="rate-tag">${d.label} <b>${d.special ? bodyScore(t.rating[d.key]) : t.rating[d.key]}</b></span>`).join('')}
       </div>` : '';
     return `
     <div class="tx-item">
@@ -273,10 +274,10 @@ async function brewSheet(bean, editTx = null) {
 
     <div class="field-row">
       <div class="field"><label>水温 ℃</label>
-        <input type="number" id="brew-temp" inputmode="decimal" min="0" max="100" step="0.5" value="${P ? (P.temp ?? 92) : (lastParams.temp ?? 92)}"/></div>
+        <input type="number" id="brew-temp" inputmode="decimal" min="0" max="100" step="0.5" value="${P ? (P.temp ?? 93) : (lastParams.temp ?? 93)}"/></div>
       <div class="field"><label>粉水比</label>
         <select id="brew-ratio">
-          ${[13, 14, 15, 16, 17].map((r) => `<option value="${r}"${Number(P ? (P.ratio ?? 15) : (lastParams.ratio ?? 15)) === r ? ' selected' : ''}>1:${r}</option>`).join('')}
+          ${[13, 14, 15, 16, 17].map((r) => `<option value="${r}"${Number(P ? (P.ratio ?? 16) : (lastParams.ratio ?? 16)) === r ? ' selected' : ''}>1:${r}</option>`).join('')}
         </select></div>
     </div>
     <div class="field-row">
@@ -285,8 +286,12 @@ async function brewSheet(bean, editTx = null) {
       <div class="field"><label>冲煮时长</label>
         <input type="text" id="brew-dur" placeholder="如 2:30 或 150" maxlength="8" value="${durStr}"/></div>
     </div>
-    <div class="field"><label>研磨度</label>
-      <input type="text" id="brew-grind" placeholder="如 C40 24格" maxlength="20" value="${P ? (P.grind || '') : esc(lastParams.grind || '')}"/></div>
+    <div class="field-row">
+      <div class="field"><label>研磨度</label>
+        <input type="text" id="brew-grind" placeholder="如 C40 24格" maxlength="20" value="${P ? (P.grind || '') : esc(lastParams.grind || '')}"/></div>
+      <div class="field"><label>Bypass 加水 g（选填）</label>
+        <input type="number" id="brew-bypass" inputmode="decimal" min="0" step="1" placeholder="浓了加多少水稀释" value="${P && P.bypass != null ? P.bypass : (lastParams.bypass != null ? lastParams.bypass : '')}"/></div>
+    </div>
 
     <div class="field-row">
       <div class="field"><label>壶</label><select data-cat="kettle"></select></div>
@@ -307,10 +312,13 @@ async function brewSheet(bean, editTx = null) {
     <div id="brew-rates" hidden>
       ${RATING_DIMS.map((d) => `
         <div class="rate-row">
-          <div class="rate-head"><span class="rate-label">${d.label}</span><span class="rate-val" id="rv-${d.key}">7.0</span></div>
-          <input type="range" class="rate" min="0" max="10" step="0.5" value="7" data-k="${d.key}"/>
+          <div class="rate-head">
+            <span class="rate-label">${d.label}${d.special ? ' <small style="color:var(--ink-3);font-weight:400;font-size:11px;">5 = 平衡满分</small>' : ''}</span>
+            <span class="rate-val" id="rv-${d.key}">${d.special ? '5 → 10分' : '7.0'}</span>
+          </div>
+          <input type="range" class="rate" min="0" max="10" step="0.5" value="${d.special ? 5 : 7}" data-k="${d.key}"${d.special ? ' data-special="1"' : ''}/>
         </div>`).join('')}
-      <div class="muted" style="text-align:left;margin-bottom:10px;">0 = 不适用 · 10 分制，按整体感受打</div>
+      <div class="muted" style="text-align:left;margin-bottom:10px;">花香/果香/甜感/酸质：越高越好，0 = 不适用 · Body 记厚薄感，5 为完美平衡，偏离扣分 · 整体自动算平均</div>
     </div>
 
     <button class="btn primary block" id="brew-save">记录冲煮</button>`;
@@ -344,7 +352,10 @@ async function brewSheet(bean, editTx = null) {
 
       /* 器具下拉：默认★ > 上次使用 > 不记录；可现场新增 */
       const fillSelect = (sel, cat) => {
-        const catItems = items.filter((i) => i.cat === cat);
+        const catItems = items.filter((i) => i.cat === cat)
+          .sort((a, b) => ((b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+            || ((a.createdAt || 0) - (b.createdAt || 0))
+            || String(a.id).localeCompare(String(b.id)));
         const def = catItems.find((i) => i.isDefault);
         const pre = (editTx && editTx.equip && editTx.equip[cat]) || (def && def.name) || lastEquip[cat] || '';
         sel.innerHTML = `<option value="">不记录</option>` +
@@ -361,7 +372,7 @@ async function brewSheet(bean, editTx = null) {
           if (sel.value !== '__new__') return;
           const name = await promptNewEquip(catLabel);
           if (name) {
-            const item = { id: uid(), cat, name, isDefault: false };
+            const item = { id: uid(), cat, name, isDefault: false, createdAt: Date.now() };
             items.push(item);
             await db.equip.put(item);
             fillSelect(sel, cat);
@@ -387,7 +398,10 @@ async function brewSheet(bean, editTx = null) {
       const on = el.querySelector('#brew-rate-on');
       on.onchange = () => { el.querySelector('#brew-rates').hidden = !on.checked; };
       el.querySelectorAll('input[type="range"].rate').forEach((r) => {
-        r.oninput = () => { el.querySelector('#rv-' + r.dataset.k).textContent = Number(r.value).toFixed(1); };
+        r.oninput = () => {
+          const v = Number(r.value);
+          el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${bodyScore(v)}分` : v.toFixed(1);
+        };
       });
       if (editTx && editTx.rating) {
         on.checked = true;
@@ -396,7 +410,7 @@ async function brewSheet(bean, editTx = null) {
           const v = editTx.rating[r.dataset.k];
           if (v != null) {
             r.value = v;
-            el.querySelector('#rv-' + r.dataset.k).textContent = Number(v).toFixed(1);
+            el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${bodyScore(v)}分` : Number(v).toFixed(1);
           }
         });
       }
@@ -414,6 +428,7 @@ async function brewSheet(bean, editTx = null) {
           ratio: Number(ratioSel.value),
           grind: el.querySelector('#brew-grind').value.trim(),
           duration: parseDuration(el.querySelector('#brew-dur').value),
+          bypass: parseFloat(el.querySelector('#brew-bypass').value) || null,
         };
 
         const rating = on.checked ? {} : null;
