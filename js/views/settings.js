@@ -120,8 +120,9 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.5.0</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.6.2</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
+        <div class="kv"><span class="k">持久存储</span><span class="v" id="persist-status">检测中…</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
         <div class="kv"><span class="k">隐私</span><span class="v">无服务器、无账号、无追踪</span></div>
       </div>
@@ -159,6 +160,16 @@ export async function render(view) {
     if (f) importBackup(f);
   });
   $('#row-wipe').addEventListener('click', wipeAll);
+
+  /* 持久存储授权状态（未授权时数据可能被系统空间回收） */
+  if (navigator.storage && navigator.storage.persisted) {
+    navigator.storage.persisted().then((p) => {
+      const el = $('#persist-status');
+      if (el) el.innerHTML = p
+        ? '✓ 已授权（系统不会自动清理）'
+        : '<span style="color:var(--aging);">未授权（建议经常导出备份）</span>';
+    }).catch(() => {});
+  }
 
   /* 云同步 */
   if (syncSession) {

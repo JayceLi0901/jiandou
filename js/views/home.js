@@ -2,7 +2,7 @@
 import { db, deleteBeanDeep } from '../db.js';
 import { bannerBeans, sortBeans, statusOf, fmtG, esc } from '../util.js';
 import { photoURL, toast, vibrate, confirmBox, beanMark } from '../ui.js';
-import { readMirror, restoreFromMirror } from '../backup.js';
+import { readMirror, restoreFromMirror, exportBackup } from '../backup.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
@@ -26,6 +26,18 @@ export async function render(view) {
     <a class="banner" href="#/bean/${bn[0].id}" style="display:block;">
       <div class="banner-title">${todayN ? '🎉 今天开喝' : `${beanMark(22)}<span>已养好，等你开喝</span>`}</div>
       <div class="banner-beans">${bn.slice(0, 4).map((b) => `<span class="banner-chip">${esc(b.name || '未命名')}</span>`).join('')}${bn.length > 4 ? `<span class="banner-chip">等 ${bn.length} 包</span>` : ''}</div>
+    </a>`;
+  }
+
+  /* 每月备份横幅：本月还没导出过备份就提醒（点击下载，落在下载目录，清浏览器数据删不掉） */
+  const lastBackupAt = await db.settings.get('lastBackupAt', null);
+  const monthNow = new Date().toISOString().slice(0, 7);
+  const backedThisMonth = lastBackupAt && new Date(lastBackupAt).toISOString().slice(0, 7) === monthNow;
+  if (beans.length && !backedThisMonth) {
+    html += `
+    <a class="banner" id="backup-banner" style="display:block;cursor:pointer;background:linear-gradient(140deg,#8B6B4A,#5C4426);">
+      <div class="banner-title">📋 本月还没备份</div>
+      <div class="banner-beans"><span class="banner-chip">点一下，把 ${beans.length} 份档案存到下载目录</span></div>
     </a>`;
   }
 
@@ -61,6 +73,10 @@ export async function render(view) {
   view.innerHTML = html;
 
   const list = view.querySelector('#bean-list');
+  view.querySelector('#backup-banner')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    exportBackup().then(() => render(view));
+  });
   const seg = view.querySelector('#home-seg');
   seg.addEventListener('click', (e) => {
     const btn = e.target.closest('button');

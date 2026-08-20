@@ -1,7 +1,7 @@
 /* 鉴豆 · 入口：hash 路由 + 顶栏/底栏状态 + Service Worker */
 import { revokePhotoUrls } from './ui.js';
 import { db } from './db.js';
-import { mirrorSnapshot, exportBackup } from './backup.js';
+import { mirrorSnapshot } from './backup.js';
 import { getSession, pushData, pullData } from './sync.js';
 import * as home from './views/home.js';
 import * as stats from './views/stats.js';
@@ -83,17 +83,6 @@ backBtn.addEventListener('click', () => {
 
 window.addEventListener('hashchange', router);
 router().then(async () => {
-  /* 每月首次打开：自动导出一份备份到手机下载目录（浏览器清缓存删不掉，防误清） */
-  try {
-    const month = new Date().toISOString().slice(0, 7);
-    const last = await db.settings.get('autoBackupMonth', '');
-    if (last < month) {
-      await db.settings.set('autoBackupMonth', month);
-      const beans = await db.beans.all();
-      if (beans.length) setTimeout(() => exportBackup(), 1500);
-    }
-  } catch (_) {}
-
   /* 云同步：登录过则开屏静默「先拉后推」合并 */
   const session = getSession();
   if (session) {
