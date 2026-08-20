@@ -872,7 +872,7 @@ input[type="range"].rate::-moz-range-thumb {
   letter-spacing: 0.1em;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: -4px 0 14px rgba(168, 69, 47, 0.25);
+  overflow: hidden;
 }
 
 /* ---------------- 通用 ---------------- */
