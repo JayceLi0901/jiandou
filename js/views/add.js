@@ -233,7 +233,8 @@ export async function render(view, params) {
       await db.beans.put(bean);
       vibrate(12);
       toast(st.editing ? '已保存' : `「${name}」已入库`, 'ok');
-      location.hash = '#/bean/' + bean.id;
+      /* replace：建档/编辑页从历史栈移除，返回时直接回列表而不是空表单 */
+      location.replace('#/bean/' + bean.id);
     } catch (e) {
       toast('保存失败：' + e.message, 'err');
       btn.disabled = false; btn.textContent = st.editing ? '保存修改' : '入库建档';

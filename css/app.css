@@ -633,7 +633,7 @@ input[type="range"].rate::-moz-range-thumb {
 }
 .sheet {
   position: fixed;
-  left: 50%; transform: translateX(-50%);
+  left: 0; right: 0; margin: 0 auto;
   bottom: 0;
   width: 100%; max-width: 560px;
   max-height: 86dvh;
@@ -647,7 +647,7 @@ input[type="range"].rate::-moz-range-thumb {
 }
 .sheet-grab { width: 38px; height: 4.5px; border-radius: 99px; background: var(--hairline); margin: 4px auto 14px; }
 .sheet-title { font-family: var(--serif); font-size: 18px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 14px; text-align: center; }
-@keyframes sheetUp { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------------- Toast ---------------- */

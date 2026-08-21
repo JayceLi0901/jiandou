@@ -1,7 +1,7 @@
 /* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
 import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
 import { datePickerSheet } from '../datepick.js';
-import { statusOf, avgRatings, RATING_DIMS, bodyScore, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
+import { statusOf, avgRatings, RATING_DIMS, centerScore, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
 
@@ -136,6 +136,17 @@ async function draw(view, full) {
     location.hash = '#/';
   };
   $('#act-del')?.addEventListener('click', del);
+  /* 下滑时顶栏标题换成「烘焙商 · 豆子名称」，回滚恢复 */
+  if (view._jdTitleScroll) view.removeEventListener('scroll', view._jdTitleScroll);
+  const titleEl = document.getElementById('page-title');
+  const scrolledTitle = [bean.roaster, bean.name].filter(Boolean).join(' · ') || bean.name || '豆子档案';
+  view._jdTitleScroll = () => {
+    if (location.hash.includes('#/bean/')) {
+      titleEl.textContent = view.scrollTop > 150 ? scrolledTitle : '豆子档案';
+    }
+  };
+  view.addEventListener('scroll', view._jdTitleScroll, { passive: true });
+
   /* 编辑历史流水 */
   view.querySelectorAll('.tx-edit').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -194,7 +205,7 @@ function txListHtml(txs) {
     const ratingHtml = t.rating ? `
       <div class="tx-rating">
         ${RATING_DIMS.filter((d) => t.rating[d.key] != null && t.rating[d.key] !== '')
-          .map((d) => `<span class="rate-tag">${d.label} <b>${d.special ? bodyScore(t.rating[d.key]) : t.rating[d.key]}</b></span>`).join('')}
+          .map((d) => `<span class="rate-tag">${d.label} <b>${d.special ? centerScore(t.rating[d.key]) : t.rating[d.key]}</b></span>`).join('')}
       </div>` : '';
     return `
     <div class="tx-item">
@@ -316,9 +327,9 @@ async function brewSheet(bean, editTx = null) {
             <span class="rate-label">${d.label}${d.special ? ' <small style="color:var(--ink-3);font-weight:400;font-size:11px;">5 = 平衡满分</small>' : ''}</span>
             <span class="rate-val" id="rv-${d.key}">${d.special ? '5 → 10分' : '7.0'}</span>
           </div>
-          <input type="range" class="rate" min="0" max="10" step="0.5" value="${d.special ? 5 : 7}" data-k="${d.key}"${d.special ? ' data-special="1"' : ''}/>
+          <input type="range" class="rate" min="0" max="10" step="0.5" value="${d.special ? 5 : 7}" data-k="${d.key}"${d.special ? ' data-special="1"' : ''} inputmode="none" autocomplete="off"/>
         </div>`).join('')}
-      <div class="muted" style="text-align:left;margin-bottom:10px;">花香/果香/甜感/酸质：越高越好，0 = 不适用 · Body 记厚薄感，5 为完美平衡，偏离扣分 · 整体自动算平均</div>
+      <div class="muted" style="text-align:left;margin-bottom:10px;">花香/果香/甜感/余韵：越高越好，0 = 不适用 · 酸质与 Body 记强度感受，5 为完美平衡，偏离扣分 · 整体自动算平均</div>
     </div>
 
     <button class="btn primary block" id="brew-save">记录冲煮</button>`;
@@ -384,7 +395,11 @@ async function brewSheet(bean, editTx = null) {
         });
       });
 
-      /* 快捷克数 */
+      /* 快捷克数：高亮与当前克重保持一致（编辑回填时不误导） */
+      const syncPills = () => {
+        const cur = String(parseFloat(gEl.value) || '');
+        el.querySelectorAll('.quick-pill').forEach((x) => x.classList.toggle('on', x.dataset.g === cur));
+      };
       el.querySelectorAll('.quick-pill').forEach((p) => {
         p.onclick = () => {
           el.querySelectorAll('.quick-pill').forEach((x) => x.classList.toggle('on', x === p));
@@ -392,7 +407,8 @@ async function brewSheet(bean, editTx = null) {
           syncWater();
         };
       });
-      el.querySelector('.quick-pill').classList.add('on');
+      gEl.addEventListener('input', syncPills);
+      syncPills();
 
       /* 评分开关（编辑时回填已有评分） */
       const on = el.querySelector('#brew-rate-on');
@@ -400,7 +416,7 @@ async function brewSheet(bean, editTx = null) {
       el.querySelectorAll('input[type="range"].rate').forEach((r) => {
         r.oninput = () => {
           const v = Number(r.value);
-          el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${bodyScore(v)}分` : v.toFixed(1);
+          el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${centerScore(v)}分` : v.toFixed(1);
         };
       });
       if (editTx && editTx.rating) {
@@ -410,7 +426,7 @@ async function brewSheet(bean, editTx = null) {
           const v = editTx.rating[r.dataset.k];
           if (v != null) {
             r.value = v;
-            el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${bodyScore(v)}分` : Number(v).toFixed(1);
+            el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${centerScore(v)}分` : Number(v).toFixed(1);
           }
         });
       }

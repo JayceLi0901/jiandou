@@ -1,20 +1,23 @@
 /* 鉴豆 · 工具函数：日期、状态计算、格式化 */
 
-/* 评分维度：花香/果香/甜感/酸质 直接打分；Body 特殊（记录厚薄感，5=完美平衡）
-   「整体」不再手填，自动 = 五维得分平均 */
+/* 评分维度：花香/果香/甜感/余韵 直接打分（越高越好）；
+   酸质与 Body 为「中心分」：滑条记录强度感受，5 = 完美平衡满分，偏离扣分
+   「整体」自动 = 各维得分平均 */
 export const RATING_DIMS = [
-  { key: 'floral',   label: '花香' },
-  { key: 'fruity',   label: '果香' },
-  { key: 'sweet',    label: '甜感' },
-  { key: 'acidity',  label: '酸质' },
-  { key: 'body',     label: 'Body', special: true },
+  { key: 'floral',     label: '花香' },
+  { key: 'fruity',     label: '果香' },
+  { key: 'sweet',      label: '甜感' },
+  { key: 'aftertaste', label: '余韵' },
+  { key: 'acidity',    label: '酸质', special: true },
+  { key: 'body',       label: 'Body', special: true },
 ];
 
-/* Body 计分：5 = 满分，偏薄/偏厚每 1 分扣 2 分 */
-export function bodyScore(raw) {
+/* 中心分计分：5 = 满分，偏离每 1 分扣 2 分（酸质与 Body 共用） */
+export function centerScore(raw) {
   if (raw == null || raw === '') return null;
   return Math.max(0, Math.round((10 - 2 * Math.abs(Number(raw) - 5)) * 10) / 10);
 }
+export const bodyScore = centerScore;
 
 /* 单条评分 → 各维得分 + 自动整体（0 或空 = 不适用，跳过） */
 export function ratingScores(rating) {
@@ -23,8 +26,8 @@ export function ratingScores(rating) {
   for (const d of RATING_DIMS) {
     const v = Number(rating?.[d.key]);
     if (d.special) {
-      out.body = bodyScore(rating?.body);
-      if (out.body != null && out.body > 0) vals.push(out.body);
+      out[d.key] = centerScore(rating?.[d.key]);
+      if (out[d.key] != null && out[d.key] > 0) vals.push(out[d.key]);
     } else {
       out[d.key] = Number.isNaN(v) ? null : v;
       if (!Number.isNaN(v) && v > 0) vals.push(v);

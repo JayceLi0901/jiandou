@@ -66,6 +66,12 @@ export function sheet({ title = '', html = '', onMount, onClose, dismissable = t
   };
   if (dismissable) mask.addEventListener('click', close);
   root.append(mask, s);
+  /* 动画结束后移除 animation 并固定为独立合成层，防止切后台返回时圆角黑边闪烁 */
+  s.addEventListener('animationend', () => {
+    s.style.animation = 'none';
+    s.style.transform = 'translateZ(0)';
+    s.style.backfaceVisibility = 'hidden';
+  }, { once: true });
   onMount && onMount(s, close);
   return { close, el: s };
 }
