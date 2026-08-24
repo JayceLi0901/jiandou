@@ -8,7 +8,7 @@ function esc2(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '
 
 /* ---------- 横向条形图（标签自适应全名，条形随标签宽度收缩） ----------
    items: [{label, value}]（已排序，条数建议 ≤ 6） */
-export function barChart(items, { unit = '' } = {}) {
+export function barChart(items, { unit = '', labelAlign = 'end' } = {}) {
   if (!items.length) return '';
   const W = 320, rowH = 36, top = 6;
   const H = top + items.length * rowH + 4;
@@ -27,8 +27,10 @@ export function barChart(items, { unit = '' } = {}) {
     const bw = Math.max(4, (barMax * it.value) / max);
     const estimated = chars * fs;
     const fit = estimated > labelW - 4 ? ` textLength="${labelW - 4}" lengthAdjust="spacingAndGlyphs"` : '';
+    const labelX = labelAlign === 'start' ? 0 : labelW;
+    const anchor = labelAlign === 'start' ? 'start' : 'end';
     out += `
-      <text x="${labelW}" y="${y + 17}" text-anchor="end" font-size="${fs}" fill="#7A6B5C"${fit}>${esc2(it.label)}</text>
+      <text x="${labelX}" y="${y + 17}" text-anchor="${anchor}" font-size="${fs}" fill="#7A6B5C"${fit}>${esc2(it.label)}</text>
       <rect x="${x0}" y="${y + 7}" width="${barMax}" height="10" rx="5" fill="#EFE7D9"/>
       <rect x="${x0}" y="${y + 7}" width="${bw}" height="10" rx="5" fill="${PALETTE[idx % PALETTE.length]}">
         <animate attributeName="width" from="0" to="${bw}" dur="0.5s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
@@ -40,7 +42,7 @@ export function barChart(items, { unit = '' } = {}) {
 
 function trunc(s, n) { return String(s || '').length > n ? String(s).slice(0, n) + '…' : String(s || ''); }
 
-/* ---------- 环形图（可交互：点扇区/图例 → 单独高亮并在中心显示明细） ----------
+/* ---------- 环形图（可交互：点扇区/图例 → 单独高亮，明细由页面展示在图侧） ----------
    items: [{label, value}]（可包含“其他”），返回 { svg, legend } */
 export function donutChart(items) {
   const total = items.reduce((s, i) => s + i.value, 0) || 1;

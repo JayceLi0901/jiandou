@@ -574,16 +574,19 @@ input[type="range"].rate::-moz-range-thumb {
 
 .rank-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 2px;
+  padding: 11px 8px;
   border-bottom: 1px solid var(--hairline);
   text-decoration: none; color: inherit;
 }
 .rank-item:last-child { border-bottom: none; }
-.rank-no { font-family: var(--num); font-size: 17px; font-weight: 700; color: var(--ink-3); width: 22px; text-align: center; }
-.rank-no.top { color: var(--accent-deep); }
+.rank-no { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; border-radius:50%; font-family:var(--num); font-size:15px; font-weight:800; color:var(--ink-3); background:#F1ECE4; }
+.rank-no.medal-1 { width:36px; height:36px; flex-basis:36px; font-size:20px; color:#6E4800; background:linear-gradient(145deg,#FFF1A8,#D9A326); box-shadow:0 5px 14px rgba(194,139,21,.28); }
+.rank-no.medal-2 { color:#59616A; background:linear-gradient(145deg,#F8FAFC,#BCC3CA); }
+.rank-no.medal-3 { color:#70411F; background:linear-gradient(145deg,#F3C398,#B8723E); }
+.rank-item.rank-1 { margin:4px 0 5px; border:1px solid rgba(206,160,54,.27); border-radius:14px; background:linear-gradient(90deg,rgba(255,241,185,.34),rgba(255,253,249,.2)); }
 .rank-main { flex: 1; min-width: 0; }
-.rank-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
+.rank-name { display:block; max-width:100%; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-sub { display:block; max-width:100%; font-size: 11.5px; color: var(--ink-3); margin-top: 1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rank-score { font-family: var(--num); font-size: 21px; font-weight: 700; color: var(--accent-deep); }
 
 /* ---------------- 设置页 ---------------- */
@@ -781,6 +784,16 @@ input[type="range"].rate::-moz-range-thumb {
 .legend-item.sel { color: var(--accent-deep); font-weight: 700; }
 .legend-item.sel .legend-dot { transform: scale(1.35); }
 .legend-dot { transition: transform .18s cubic-bezier(.34,1.56,.64,1); }
+.donut-stage { display:flex; align-items:center; justify-content:center; min-height:160px; gap:4px; }
+.donut-stage .chart-svg { flex:0 0 142px; max-width:142px !important; margin:0 !important; }
+.donut-detail { flex:0 1 112px; min-width:0; padding:10px 8px; border-left:1px solid var(--hairline); }
+.donut-detail-name { font-size:13px; line-height:1.45; font-weight:650; color:var(--ink); overflow-wrap:anywhere; }
+.donut-detail-meta { margin-top:4px; font-size:10.5px; color:var(--ink-3); }
+.stats-filter-head { align-items:center; gap:10px; }
+.stats-range { max-width:112px; min-height:34px; margin-left:auto; padding:5px 28px 5px 10px; border:1px solid var(--hairline); border-radius:10px; background-color:var(--card); color:var(--ink-2); font:12px var(--sans); }
+.consumption-total { margin-top:9px; font:700 24px var(--num); color:var(--ink); }
+.consumption-total small { margin-left:3px; font:11px var(--sans); color:var(--ink-3); }
+.consumption-empty { min-height:100px; display:flex; align-items:center; justify-content:center; }
 
 /* 卡片删除手势 */
 .bean-card { touch-action: pan-y; }

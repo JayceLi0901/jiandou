@@ -36,8 +36,13 @@ export async function render(view) {
     </div>
 
     <div class="card">
-      <div class="card-title">近 8 周冲煮消耗<b>${fmtG(brewGrams)} g</b></div>
-      ${weeklyArea(brews) || '<div class="muted" style="padding:10px 0;">还没有冲煮记录</div>'}
+      <div class="card-title stats-filter-head"><span id="consumption-title">本周冲煮消耗</span>
+        <select id="stats-range" class="stats-range" aria-label="选择统计时间范围">
+          <option value="week">本周</option><option value="month">近一月</option>
+          <option value="quarter">近一季度</option><option value="year">近一年</option><option value="all">全部</option>
+        </select>
+      </div>
+      <div id="consumption-chart"></div>
     </div>
 
     <div class="card">
@@ -47,51 +52,60 @@ export async function render(view) {
 
     <div class="card">
       <div class="card-title">产地分布</div>
-      <div class="donut-box" id="donut-origin">${originDonut.svg}${originDonut.legend}
+      <div class="donut-box" id="donut-origin"><div class="donut-stage">${originDonut.svg}<div class="donut-detail" hidden><div class="donut-detail-name"></div><div class="donut-detail-meta"></div></div></div>${originDonut.legend}
         <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
     </div>
 
     <div class="card">
       <div class="card-title">处理法分布</div>
-      <div class="donut-box" id="donut-process">${processDonut.svg}${processDonut.legend}
+      <div class="donut-box" id="donut-process"><div class="donut-stage">${processDonut.svg}<div class="donut-detail" hidden><div class="donut-detail-name"></div><div class="donut-detail-meta"></div></div></div>${processDonut.legend}
         <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
     </div>
 
     <div class="card">
       <div class="card-title">烘焙商 TOP</div>
-      ${barChart(topBy(beans, 'roaster', 5))}
+      ${barChart(topBy(beans, 'roaster', 5), { labelAlign: 'start' })}
     </div>
 
     <div class="card">
-      <div class="card-title">评分排行 · 按整体分</div>
-      ${rankHtml(beans, txs)}
+      <div class="card-title" id="rank-title">风味排名 · 本周</div>
+      <div id="rank-list"></div>
     </div>`;
 
-  /* 环形图交互：点扇区/图例 → 高亮单项并在中心显示明细；再点取消 */
+  /* 环形图交互：点扇区/图例 → 高亮单项并在图侧显示明细；再点取消 */
   wireDonut(view.querySelector('#donut-origin'), originItems);
   wireDonut(view.querySelector('#donut-process'), processItems);
+  const range = view.querySelector('#stats-range');
+  const applyRange = () => {
+    const info = rangeInfo(range.value, brews);
+    view.querySelector('#consumption-title').textContent = `${info.label}冲煮消耗`;
+    view.querySelector('#consumption-chart').innerHTML = `<div class="consumption-total">${fmtG(info.grams)}<small>g</small></div>${info.filtered.length ? areaChart(info.points) : '<div class="muted consumption-empty">这段时间还没有冲煮记录</div>'}`;
+    view.querySelector('#rank-title').textContent = `风味排名 · ${info.label}`;
+    view.querySelector('#rank-list').innerHTML = rankHtml(beans, info.filtered);
+  };
+  range.addEventListener('change', applyRange);
+  applyRange();
 }
 
 function wireDonut(box, items) {
   if (!box) return;
   const segs = box.querySelectorAll('.donut-seg');
   const legs = box.querySelectorAll('.legend-item');
-  const c1 = box.querySelector('.donut-c1');
-  const c2 = box.querySelector('.donut-c2');
+  const detail = box.querySelector('.donut-detail');
+  const detailName = box.querySelector('.donut-detail-name');
+  const detailMeta = box.querySelector('.donut-detail-meta');
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
   let sel = -1;
 
   const paint = () => {
     segs.forEach((s) => s.classList.toggle('dim', sel !== -1 && Number(s.dataset.i) !== sel));
     legs.forEach((l) => l.classList.toggle('sel', sel !== -1 && Number(l.dataset.i) === sel));
-    if (sel === -1) {
-      c1.textContent = String(total);
-      c2.textContent = '包';
-    } else {
+    detail.hidden = sel === -1;
+    if (sel !== -1) {
       const it = items[sel] || { label: '—', value: 0 };
       const pct = Math.round((it.value / total) * 100);
-      c1.textContent = [...String(it.label)].length > 5 ? [...String(it.label)].slice(0, 5).join('') + '…' : String(it.label);
-      c2.textContent = `${it.value} 包 · ${pct}%`;
+      detailName.textContent = String(it.label);
+      detailMeta.textContent = `${it.value} 包 · ${pct}%`;
     }
   };
   [...segs, ...legs].forEach((el) => {
@@ -104,29 +118,58 @@ function wireDonut(box, items) {
   paint();
 }
 
-/* ---------- 近 8 周面积图 ---------- */
-function weeklyArea(brews) {
-  const weeks = []; // [mondayDate, grams]
+/* ---------- 时间范围与消费趋势 ---------- */
+const RANGE_LABELS = { week: '本周', month: '近一月', quarter: '近一季度', year: '近一年', all: '全部' };
+
+function rangeInfo(range, brews) {
   const now = new Date();
+  now.setHours(23, 59, 59, 999);
   const monday = new Date(now);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  for (let i = 7; i >= 0; i--) {
-    const m = new Date(monday);
-    m.setDate(m.getDate() - i * 7);
-    weeks.push([m, 0]);
-  }
-  for (const t of brews) {
-    const d = parseDate(t.date);
-    if (!d) continue;
-    for (let i = weeks.length - 1; i >= 0; i--) {
-      if (d >= weeks[i][0]) { weeks[i][1] += Number(t.grams) || 0; break; }
+  let start = monday;
+  if (range === 'month') { start = new Date(now); start.setDate(start.getDate() - 29); start.setHours(0, 0, 0, 0); }
+  if (range === 'quarter') { start = new Date(now); start.setMonth(start.getMonth() - 2, 1); start.setHours(0, 0, 0, 0); }
+  if (range === 'year') { start = new Date(now.getFullYear(), now.getMonth() - 11, 1); }
+  if (range === 'all') start = null;
+  const filtered = brews.filter((t) => { const d = parseDate(t.date); return d && (!start || d >= start) && d <= now; });
+  const grams = filtered.reduce((s, t) => s + (Number(t.grams) || 0), 0);
+  return { label: RANGE_LABELS[range] || RANGE_LABELS.week, filtered, grams, points: consumptionPoints(range, filtered, start, now) };
+}
+
+function consumptionPoints(range, brews, start, now) {
+  let points = [];
+  if (range === 'week') {
+    points = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return { key: dateKey(d), label: ['一','二','三','四','五','六','日'][i], value: 0 }; });
+  } else if (range === 'month') {
+    points = Array.from({ length: 5 }, (_, i) => ({ key: i, label: i === 4 ? '本周' : `${4 - i}周前`, value: 0 }));
+  } else {
+    let first = start;
+    if (!first) {
+      const ds = brews.map((t) => parseDate(t.date)).filter(Boolean).sort((a, b) => a - b);
+      first = ds[0] || new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const months = (now.getFullYear() - first.getFullYear()) * 12 + now.getMonth() - first.getMonth() + 1;
+    if (range === 'all' && months > 24) {
+      points = Array.from({ length: now.getFullYear() - first.getFullYear() + 1 }, (_, i) => ({ key: String(first.getFullYear() + i), label: `${first.getFullYear() + i}`, value: 0 }));
+    } else {
+      points = Array.from({ length: months }, (_, i) => { const d = new Date(first.getFullYear(), first.getMonth() + i, 1); return { key: monthKey(d), label: `${d.getMonth() + 1}月`, value: 0 }; });
     }
   }
-  if (!brews.length) return '';
-  const label = (m) => `${m.getMonth() + 1}/${m.getDate()}`;
-  return areaChart(weeks.map(([m, g], i) => ({ label: i === weeks.length - 1 ? '本周' : label(m), value: Math.round(g) })));
+  for (const t of brews) {
+    const d = parseDate(t.date); if (!d) continue;
+    let key;
+    if (range === 'week') key = dateKey(d);
+    else if (range === 'month') key = Math.min(4, Math.max(0, 4 - Math.floor((now - d) / 604800000)));
+    else if (range === 'all' && points.length && /^\d{4}$/.test(points[0].key)) key = String(d.getFullYear());
+    else key = monthKey(d);
+    const p = points.find((x) => x.key === key); if (p) p.value += Number(t.grams) || 0;
+  }
+  return points.map(({ label, value }) => ({ label, value: Math.round(value) }));
 }
+
+function dateKey(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function monthKey(d) { return `${d.getFullYear()}-${d.getMonth()}`; }
 
 /* ---------- 计数 TOP（含「其他」合并） ---------- */
 function topBy(beans, key, n) {
@@ -159,8 +202,8 @@ function rankHtml(beans, txs) {
     .slice(0, 5);
   if (!ranked.length) return `<div class="muted" style="padding:10px 0;">冲煮时打过分，这里会出现你的高分榜单 🏆</div>`;
   return ranked.map((r, i) => `
-    <a class="rank-item" href="#/bean/${r.bean.id}">
-      <span class="rank-no ${i < 3 ? 'top' : ''}">${i + 1}</span>
+    <a class="rank-item rank-${i + 1}" href="#/bean/${r.bean.id}">
+      <span class="rank-no medal-${i + 1}">${i + 1}</span>
       <span class="rank-main">
         <span class="rank-name">${esc(r.bean.name || '未命名')}</span>
         <span class="rank-sub">${esc(r.bean.roaster || r.bean.origin || '')} · ${r.avg._count} 次打分</span>

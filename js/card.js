@@ -206,18 +206,7 @@ export async function exportTxCard(bean, tx, txs) {
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
     if (!blob) { toast('图片生成失败', 'err'); return; }
     const filename = `jiandou-${(bean.name || '豆子').replace(/[\\/:*?"<>|\s]/g, '')}-${tx.date}.png`;
-    const file = new File([blob], filename, { type: 'image/png' });
-
-    /* Android PWA 无权静默写入系统相册：优先打开系统分享面板，可直接选择相册/图片；不支持时退回下载目录。 */
-    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-      try {
-        await navigator.share({ files: [file], title: `${bean.name || '咖啡豆'} · 冲煮记录` });
-        toast('分享卡片已生成 🖼', 'ok');
-        return;
-      } catch (e) {
-        if (e?.name === 'AbortError') return;
-      }
-    }
+    /* 点击后直接下载到本机，不再经过系统分享面板。 */
     const a = document.createElement('a');
     const url = URL.createObjectURL(blob);
     a.href = url;
@@ -226,7 +215,7 @@ export async function exportTxCard(bean, tx, txs) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast('卡片已保存到下载目录 🖼', 'ok');
+    toast('图片已保存到本机 🖼', 'ok');
   } catch (e) {
     toast('导出失败：' + e.message, 'err');
   }
