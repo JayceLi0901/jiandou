@@ -55,10 +55,10 @@ export async function render(view) {
   /* 无豆子空状态（若镜像保险箱有数据，提示一键恢复） */
   if (!beans.length) {
     const mirror = readMirror();
-    const mirrorBanner = mirror && mirror.beans && mirror.beans.length ? `
+    const mirrorBanner = mirror && (((mirror.beans || []).length) || ((mirror.equip || []).length)) ? `
       <a class="banner" id="mirror-banner" style="display:block;cursor:pointer;">
         <div class="banner-title">🛟 发现本地镜像数据</div>
-        <div class="banner-beans"><span class="banner-chip">${mirror.beans.length} 份档案 · ${(mirror.txs || []).length} 笔流水，点击立即恢复</span></div>
+        <div class="banner-beans"><span class="banner-chip">${(mirror.beans || []).length} 份档案 · ${(mirror.txs || []).length} 笔流水 · ${(mirror.equip || []).length} 件器具，点击立即恢复</span></div>
       </a>` : '';
     view.innerHTML = html + mirrorBanner + `
       <div class="empty">

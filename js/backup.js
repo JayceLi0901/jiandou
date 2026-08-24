@@ -4,7 +4,7 @@ import { toast, confirmBox } from './ui.js';
 import { clearSession } from './sync.js';
 
 /* ---------- 本地镜像保险箱 ----------
-   每次页面渲染后把档案+流水快照写入 localStorage（不含照片，仅几 KB～几百 KB）。
+   每次页面渲染后把档案+流水+器具快照写入 localStorage（不含照片，仅几 KB～几百 KB）。
    若 IndexedDB 被系统清理/异常清空，下次打开可一键还原。 */
 const MIRROR_KEY = 'jiandou-mirror';
 
@@ -12,10 +12,13 @@ export async function mirrorSnapshot() {
   try {
     const beans = await db.beans.all();
     const txs = await db.txs.all();
+    const equip = await db.equip.all();
     const prev = readMirror();
     /* 关键：绝不用空数据覆盖非空镜像（那正是数据丢失后需要救命的时刻） */
-    if (!beans.length && prev && prev.beans && prev.beans.length) return;
-    localStorage.setItem(MIRROR_KEY, JSON.stringify({ t: Date.now(), beans, txs }));
+    const mirrorBeans = !beans.length && prev?.beans?.length ? prev.beans : beans;
+    const mirrorTxs = !beans.length && prev?.beans?.length ? (prev.txs || []) : txs;
+    const mirrorEquip = !equip.length && prev?.equip?.length ? prev.equip : equip;
+    localStorage.setItem(MIRROR_KEY, JSON.stringify({ t: Date.now(), beans: mirrorBeans, txs: mirrorTxs, equip: mirrorEquip }));
   } catch (_) { /* 存储满等异常时静默跳过 */ }
 }
 
@@ -26,16 +29,18 @@ export function readMirror() {
 
 export async function restoreFromMirror() {
   const m = readMirror();
-  if (!m || !m.beans || !m.beans.length) { toast('没有可恢复的镜像数据', 'err'); return false; }
+  if (!m || (!(m.beans || []).length && !(m.equip || []).length)) { toast('没有可恢复的镜像数据', 'err'); return false; }
   const cur = await db.beans.all();
-  if (cur.length) {
+  const curEquip = await db.equip.all();
+  if (cur.length || curEquip.length) {
     const yes = await confirmBox('恢复镜像数据？',
-      `镜像含 ${m.beans.length} 份档案 · ${(m.txs || []).length} 笔流水（快照时间 ${new Date(m.t).toLocaleString('zh-CN')}），将与现有 ${cur.length} 份档案合并，同 ID 以镜像为准`);
+      `镜像含 ${(m.beans || []).length} 份档案 · ${(m.txs || []).length} 笔流水 · ${(m.equip || []).length} 件器具（快照时间 ${new Date(m.t).toLocaleString('zh-CN')}），将与本机 ${cur.length} 份档案 · ${curEquip.length} 件器具合并，同 ID 以镜像为准`);
     if (!yes) return false;
   }
-  for (const b of m.beans) await db.beans.put(b);
+  for (const b of m.beans || []) await db.beans.put(b);
   for (const t of m.txs || []) await db.txs.put(t);
-  toast(`已恢复 ${m.beans.length} 份档案 🛟`, 'ok');
+  for (const item of m.equip || []) await db.equip.put(item);
+  toast(`已恢复 ${(m.beans || []).length} 份档案 · ${(m.equip || []).length} 件器具 🛟`, 'ok');
   location.hash = '#/';
   setTimeout(() => location.reload(), 400);
   return true;
@@ -53,7 +58,8 @@ const dataURLToBlob = async (url) => (await fetch(url)).blob();
 export async function exportBackup() {
   const beans = await db.beans.all();
   const txs = await db.txs.all();
-  if (!beans.length) { toast('还没有数据可备份', 'err'); return; }
+  const equip = await db.equip.all();
+  if (!beans.length && !equip.length) { toast('还没有数据可备份', 'err'); return; }
 
   const photos = {};
   for (const b of beans) {
@@ -63,9 +69,9 @@ export async function exportBackup() {
     }
   }
   const payload = {
-    app: 'jiandou', ver: 1,
+    app: 'jiandou', ver: 2,
     exportedAt: new Date().toISOString(),
-    beans, txs, photos,
+    beans, txs, equip, photos,
     settings: {
       engine: await db.settings.get('engine', 'local'),
       apiKey: await db.settings.get('apiKey', ''),
@@ -83,7 +89,7 @@ export async function exportBackup() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   await db.settings.set('lastBackupAt', Date.now());
-  toast(`已导出 ${beans.length} 份档案`, 'ok');
+  toast(`已导出 ${beans.length} 份档案 · ${equip.length} 件器具`, 'ok');
 }
 
 export async function importBackup(file) {
@@ -95,9 +101,10 @@ export async function importBackup(file) {
     return;
   }
   const oldBeans = await db.beans.all();
+  const oldEquip = await db.equip.all();
   const yes = await confirmBox(
     '导入备份？',
-    `备份含 ${data.beans.length} 份档案、${(data.txs || []).length} 笔流水${oldBeans.length ? `，将与现有 ${oldBeans.length} 份档案合并（同 ID 以备份为准）` : ''}`
+    `备份含 ${data.beans.length} 份档案、${(data.txs || []).length} 笔流水、${(data.equip || []).length} 件器具${oldBeans.length || oldEquip.length ? `，将与现有 ${oldBeans.length} 份档案、${oldEquip.length} 件器具合并（同 ID 以备份为准）` : ''}`
   );
   if (!yes) return;
 
@@ -107,6 +114,7 @@ export async function importBackup(file) {
     }
     for (const b of data.beans) await db.beans.put(b);
     for (const t of data.txs || []) await db.txs.put(t);
+    for (const item of data.equip || []) await db.equip.put(item);
     const s = data.settings || {};
     if (s.engine) await db.settings.set('engine', s.engine);
     if (s.apiBase) await db.settings.set('apiBase', s.apiBase);
@@ -132,6 +140,7 @@ export async function wipeAll() {
     await db.photos.del(b.photoId);
     await db.beans.del(b.id);
   }
+  for (const item of await db.equip.all()) await db.equip.del(item.id);
   localStorage.removeItem(MIRROR_KEY);
   clearSession();
   toast('已清空');

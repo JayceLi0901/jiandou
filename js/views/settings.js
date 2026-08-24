@@ -28,7 +28,7 @@ export async function render(view) {
           <button class="btn ghost sm" style="flex:1;" id="sync-pull">从云端恢复</button>
         </div>
         <div class="mt-8"><button class="btn ghost sm block" id="sync-logout" style="color:var(--ink-3);border-color:var(--hairline);">退出登录</button></div>
-        <div class="muted" style="margin-top:10px;">每次打开 App 自动同步；照片仅存本机不参与云同步</div>
+        <div class="muted" style="margin-top:10px;">档案、流水与器具自动同步；照片仅存本机</div>
       </div>` : `
       <div class="card" style="margin-bottom:0;">
         <div class="seg" id="sync-mode" style="margin-bottom:12px;">
@@ -93,10 +93,10 @@ export async function render(view) {
           <div class="set-desc">${bkDays == null ? '从未导出过备份，强烈建议立即导出一份' : bkDays === 0 ? '今天刚导出过，很棒' : `${bkDays} 天前导出过${bkDays > 30 ? '，建议再导出一份' : ''}`}</div></div>
       </div>
       <div style="height:1px;background:var(--hairline);"></div>
-      ${mirror && mirror.beans && mirror.beans.length ? `
+      ${mirror && (((mirror.beans || []).length) || ((mirror.equip || []).length)) ? `
       <div class="set-row solo" id="row-mirror" style="cursor:pointer;">
         <div class="set-main"><div class="set-title">从本地镜像恢复</div>
-          <div class="set-desc">镜像保险箱：${mirror.beans.length} 份档案 · ${(mirror.txs || []).length} 笔流水（${new Date(mirror.t).toLocaleString('zh-CN')}）</div></div>
+          <div class="set-desc">镜像保险箱：${(mirror.beans || []).length} 份档案 · ${(mirror.txs || []).length} 笔流水 · ${(mirror.equip || []).length} 件器具（${new Date(mirror.t).toLocaleString('zh-CN')}）</div></div>
         <span class="set-arrow">›</span>
       </div>
       <div style="height:1px;background:var(--hairline);"></div>` : ''}
@@ -120,7 +120,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.9.1</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.10.0</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">持久存储</span><span class="v" id="persist-status">检测中…</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
@@ -184,8 +184,8 @@ export async function render(view) {
       const yes = await confirmBox('从云端恢复？', '云端数据将与本机合并（同 ID 档案以云端为准）');
       if (!yes) return;
       try {
-        const n = await pullData(syncSession);
-        toast(`已恢复 ${n} 份档案 ☁️`, 'ok');
+        const restored = await pullData(syncSession);
+        toast(`已恢复 ${restored.beans} 份档案 · ${restored.equip} 件器具 ☁️`, 'ok');
         location.hash = '#/';
         setTimeout(() => location.reload(), 400);
       } catch (err) { toast(err.message, 'err'); }

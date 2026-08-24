@@ -110,12 +110,13 @@ async function api(session, path, opts = {}) {
 }
 
 /* ---------- 同步 ---------- */
-/* 推送：档案+流水（照片不参与云同步，仅存本机） */
+/* 推送：档案+流水+器具（照片不参与云同步，仅存本机） */
 export async function pushData(session) {
   const beans = await db.beans.all();
   const txs = await db.txs.all();
-  if (!beans.length) return null;
-  const payload = { app: 'jiandou-sync', ver: 1, exportedAt: Date.now(), beans, txs };
+  const equip = await db.equip.all();
+  if (!beans.length && !equip.length) return null;
+  const payload = { app: 'jiandou-sync', ver: 2, exportedAt: Date.now(), beans, txs, equip };
   const data = await encryptBlob(session, payload);
   const res = await api(session, '/push', {
     method: 'POST',
@@ -140,6 +141,7 @@ export async function pullData(session) {
   if (payload.app !== 'jiandou-sync') throw new Error('云端数据格式异常');
   for (const b of payload.beans || []) await db.beans.put(b);
   for (const t of payload.txs || []) await db.txs.put(t);
+  for (const item of payload.equip || []) await db.equip.put(item);
   await db.settings.set('cloudSyncedAt', updatedAt);
-  return (payload.beans || []).length;
+  return { beans: (payload.beans || []).length, equip: (payload.equip || []).length };
 }
