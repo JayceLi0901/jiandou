@@ -17,6 +17,11 @@ export async function render(view) {
   const brewGrams = brews.reduce((s, t) => s + (Number(t.grams) || 0), 0);
   const totalRemain = active.reduce((s, b) => s + (Number(b.remainingWeight) || 0), 0);
 
+  const originItems = topBy(beans, 'origin', 5);
+  const processItems = topBy(beans, 'process', 5);
+  const originDonut = donutChart(originItems);
+  const processDonut = donutChart(processItems);
+
   view.innerHTML = `
     <div class="page-head">
       <div class="page-title">统计</div>
@@ -42,12 +47,14 @@ export async function render(view) {
 
     <div class="card">
       <div class="card-title">产地分布</div>
-      ${donutBlock(beans, 'origin')}
+      <div class="donut-box" id="donut-origin">${originDonut.svg}${originDonut.legend}
+        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
     </div>
 
     <div class="card">
       <div class="card-title">处理法分布</div>
-      ${donutBlock(beans, 'process')}
+      <div class="donut-box" id="donut-process">${processDonut.svg}${processDonut.legend}
+        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
     </div>
 
     <div class="card">
@@ -59,6 +66,42 @@ export async function render(view) {
       <div class="card-title">评分排行 · 按整体分</div>
       ${rankHtml(beans, txs)}
     </div>`;
+
+  /* 环形图交互：点扇区/图例 → 高亮单项并在中心显示明细；再点取消 */
+  wireDonut(view.querySelector('#donut-origin'), originItems);
+  wireDonut(view.querySelector('#donut-process'), processItems);
+}
+
+function wireDonut(box, items) {
+  if (!box) return;
+  const segs = box.querySelectorAll('.donut-seg');
+  const legs = box.querySelectorAll('.legend-item');
+  const c1 = box.querySelector('.donut-c1');
+  const c2 = box.querySelector('.donut-c2');
+  const total = items.reduce((s, i) => s + i.value, 0) || 1;
+  let sel = -1;
+
+  const paint = () => {
+    segs.forEach((s) => s.classList.toggle('dim', sel !== -1 && Number(s.dataset.i) !== sel));
+    legs.forEach((l) => l.classList.toggle('sel', sel !== -1 && Number(l.dataset.i) === sel));
+    if (sel === -1) {
+      c1.textContent = String(total);
+      c2.textContent = '包';
+    } else {
+      const it = items[sel] || { label: '—', value: 0 };
+      const pct = Math.round((it.value / total) * 100);
+      c1.textContent = [...String(it.label)].length > 5 ? [...String(it.label)].slice(0, 5).join('') + '…' : String(it.label);
+      c2.textContent = `${it.value} 包 · ${pct}%`;
+    }
+  };
+  [...segs, ...legs].forEach((el) => {
+    el.addEventListener('click', () => {
+      const i = Number(el.dataset.i);
+      sel = sel === i ? -1 : i;
+      paint();
+    });
+  });
+  paint();
 }
 
 /* ---------- 近 8 周面积图 ---------- */
@@ -100,11 +143,6 @@ function topBy(beans, key, n) {
     arr = [...arr.slice(0, n), { label: '其他', value: rest }];
   }
   return arr.filter((i) => i.value > 0);
-}
-
-function donutBlock(beans, key) {
-  const d = donutChart(topBy(beans, key, 5));
-  return `${d.svg}${d.legend}`;
 }
 
 /* ---------- 评分排行 ---------- */

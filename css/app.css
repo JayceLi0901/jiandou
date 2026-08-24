@@ -568,8 +568,8 @@ input[type="range"].rate::-moz-range-thumb {
 .stat-cell .num small { font-size: 12px; color: var(--ink-3); font-weight: 400; margin-left: 2px; }
 .stat-cell .cap { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; letter-spacing: 0.1em; }
 
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; }
-.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.legend { position: relative; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 2px; font-size: 12px; color: var(--ink-2); touch-action: manipulation; }
 .legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 
 .rank-item {
@@ -763,16 +763,24 @@ input[type="range"].rate::-moz-range-thumb {
 
 /* 流水里的冲煮参数行 */
 .tx-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.6; }
-.tx-edit {
+.tx-acts { display: flex; flex-direction: column; align-self: flex-start; flex-shrink: 0; }
+.tx-edit, .tx-card {
   border: none; background: none;
   color: var(--ink-3);
   font-size: 14px;
-  padding: 4px 4px 4px 10px;
+  padding: 3px 4px 3px 10px;
   cursor: pointer;
-  align-self: flex-start;
   flex-shrink: 0;
 }
-.tx-edit:active { color: var(--accent-deep); }
+.tx-edit:active, .tx-card:active { color: var(--accent-deep); }
+
+/* 环形图交互 */
+.donut-seg { cursor: pointer; transition: opacity .18s ease; }
+.donut-seg.dim { opacity: .18; }
+.legend-item { cursor: pointer; transition: color .15s; }
+.legend-item.sel { color: var(--accent-deep); font-weight: 700; }
+.legend-item.sel .legend-dot { transform: scale(1.35); }
+.legend-dot { transition: transform .18s cubic-bezier(.34,1.56,.64,1); }
 
 /* 卡片删除手势 */
 .bean-card { touch-action: pan-y; }

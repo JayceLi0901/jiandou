@@ -6,6 +6,17 @@ import { readMirror, restoreFromMirror, exportBackup } from '../backup.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
+  /* 兼容旧数据/导入数据：只要余量已是 0，就不再留在「在喝」。 */
+  const emptyActive = beans.filter((b) => !b.archived && (Number(b.remainingWeight) || 0) <= 0);
+  if (emptyActive.length) {
+    const archivedAt = Date.now();
+    await Promise.all(emptyActive.map((b) => {
+      b.archived = true;
+      b.archivedAt = archivedAt;
+      b.updatedAt = archivedAt;
+      return db.beans.put(b);
+    }));
+  }
   const active = beans.filter((b) => !b.archived);
   const archived = beans.filter((b) => b.archived);
 

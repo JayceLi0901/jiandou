@@ -1,7 +1,8 @@
-/* 鉴豆 · 豆子详情：档案 + 冲煮/分豆/修正 + 评分雷达 + 流水时间线 */
-import { db, addTx, getBeanFull, deleteBeanDeep } from '../db.js';
+/* 鉴豆 · 豆子详情：档案 + 冲煮/修正 + 评分雷达 + 流水时间线 */
+import { db, addTx, recalcBean, getBeanFull, deleteBeanDeep } from '../db.js';
+import { exportTxCard } from '../card.js';
 import { datePickerSheet } from '../datepick.js';
-import { statusOf, avgRatings, RATING_DIMS, centerScore, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, calcRemaining, esc, uid } from '../util.js';
+import { statusOf, avgRatings, RATING_DIMS, centerScore, fmtG, fmtCN, fmtDuration, parseDuration, daysBetween, todayStr, esc, uid } from '../util.js';
 import { toast, vibrate, sheet, confirmBox, photoURL, viewImage } from '../ui.js';
 import { radarChart } from '../charts.js';
 
@@ -77,9 +78,8 @@ async function draw(view, full) {
            <button class="act-btn" id="act-edit">✏️<span>编辑</span></button>
            <button class="act-btn danger-act" id="act-del">🗑<span>删除</span></button>
          </div>`
-      : `<div class="act-row">
+      : `<div class="act-row" style="grid-template-columns:1fr 1fr;">
            <button class="act-btn" id="act-brew">☕<span>记一笔冲煮</span></button>
-           <button class="act-btn" id="act-share">🎁<span>分豆给咖友</span></button>
            <button class="act-btn" id="act-adjust">⚖️<span>修正克重</span></button>
          </div>
          <div style="display:flex;gap:9px;margin:4px 0 14px;">
@@ -108,7 +108,7 @@ async function draw(view, full) {
 
     <div class="card">
       <div class="card-title">流水记录<b>${txs.length}</b></div>
-      <div id="tx-list">${txListHtml(txs) || '<div class="muted" style="padding:14px 0;">还没有流水，冲煮或分豆后会记录在这里</div>'}</div>
+      <div id="tx-list">${txListHtml(txs) || '<div class="muted" style="padding:14px 0;">还没有流水，冲煮或修正克重后会记录在这里</div>'}</div>
     </div>
 
     ${bean.archived ? '' : `<div class="mt-8"><button class="btn danger block sm" id="act-del-bottom" style="display:none;">删除</button></div>`}
@@ -121,8 +121,6 @@ async function draw(view, full) {
 
   /* 冲煮 */
   $('#act-brew')?.addEventListener('click', () => brewSheet(bean));
-  /* 分豆 */
-  $('#act-share')?.addEventListener('click', () => shareSheet(bean));
   /* 修正 */
   $('#act-adjust')?.addEventListener('click', () => adjustSheet(bean));
   /* 编辑 */
@@ -153,8 +151,16 @@ async function draw(view, full) {
       const tx = txs.find((t) => t.id === btn.dataset.id);
       if (!tx) return;
       if (tx.type === 'brew') brewSheet(bean, tx);
-      else if (tx.type === 'share') shareSheet(bean, tx);
+      else if (tx.type === 'share') adjustSheet(bean, tx);  /* 分豆入口已移除，历史分豆记录归入修正编辑 */
       else adjustSheet(bean, tx);
+    });
+  });
+
+  /* 单笔流水生成分享卡片（存相册/下载） */
+  view.querySelectorAll('.tx-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tx = txs.find((t) => t.id === btn.dataset.id);
+      if (tx) exportTxCard(bean, tx, txs);
     });
   });
 
@@ -220,7 +226,10 @@ function txListHtml(txs) {
         ${t.note ? `<div class="tx-note">${esc(t.note)}</div>` : ''}
         ${ratingHtml}
       </div>
-      <button class="tx-edit" data-id="${t.id}" aria-label="编辑此记录">✎</button>
+      <div class="tx-acts">
+        <button class="tx-edit" data-id="${t.id}" aria-label="编辑此记录">✎</button>
+        <button class="tx-card" data-id="${t.id}" aria-label="生成分享卡片">⤓</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -459,10 +468,7 @@ async function brewSheet(bean, editTx = null) {
         if (editTx) {
           Object.assign(editTx, { grams: g, date, note, rating, equip, params });
           await db.txs.put(editTx);
-          const all = await db.txs.byBean(bean.id);
-          bean.remainingWeight = calcRemaining(bean, all);
-          bean.updatedAt = Date.now();
-          await db.beans.put(bean);
+          await recalcBean(bean);
           vibrate(10);
           toast('冲煮记录已更新 ✎', 'ok');
           close();
@@ -475,73 +481,14 @@ async function brewSheet(bean, editTx = null) {
         await db.settings.set('lastEquip', equip);
         await db.settings.set('lastParams', params);
 
-        await addTx(bean.id, {
+        const { bean: nb } = await addTx(bean.id, {
           type: 'brew', grams: g,
           date, note, rating, equip, params,
         });
         vibrate(10);
-        toast(`冲煮 ${fmtG(g)}g 已记录 ☕`, 'ok');
-        close();
-        rerender();
-      };
-    },
-  });
-}
-
-/* ---------------- 分豆弹层（支持编辑） ---------------- */
-function shareSheet(bean, editTx = null) {
-  const html = `
-    <div class="quick-row">
-      <button class="quick-pill" data-g="50">50g</button>
-      <button class="quick-pill" data-g="100">100g</button>
-      <button class="quick-pill" data-g="150">150g</button>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>克数（g）*</label>
-        <input type="number" id="share-g" inputmode="decimal" min="0.1" step="0.1" value="${editTx ? editTx.grams : 100}"/></div>
-      <div class="field"><label>日期</label>
-        <input type="text" id="share-date" readonly value="${editTx ? editTx.date : todayStr()}" style="cursor:pointer;"/></div>
-    </div>
-    <div class="field"><label>备注（选填）</label>
-      <textarea id="share-note" maxlength="120" placeholder="送给哪位咖友？想留句话？">${esc(editTx ? (editTx.note || '') : '')}</textarea></div>
-    <button class="btn primary block" id="share-save">${editTx ? '保存修改' : '分豆出库'}</button>`;
-
-  sheet({
-    title: editTx ? '✎ 编辑分豆' : `🎁 ${bean.name || '分豆'}`,
-    html,
-    onMount(el, close) {
-      el.querySelectorAll('.quick-pill').forEach((p) => {
-        p.onclick = () => {
-          el.querySelectorAll('.quick-pill').forEach((x) => x.classList.toggle('on', x === p));
-          el.querySelector('#share-g').value = p.dataset.g;
-        };
-      });
-      el.querySelector('.quick-pill').classList.add('on');
-      const dateEl = el.querySelector('#share-date');
-      dateEl.addEventListener('click', async () => {
-        const v = await datePickerSheet({ value: dateEl.value, title: '分豆日期' });
-        if (v) dateEl.value = v;
-      });
-      el.querySelector('#share-save').onclick = async () => {
-        const g = parseFloat(el.querySelector('#share-g').value);
-        if (!(g > 0)) { toast('请输入有效克数', 'err'); return; }
-        const date = el.querySelector('#share-date').value || todayStr();
-        const note = el.querySelector('#share-note').value.trim();
-
-        if (editTx) {
-          Object.assign(editTx, { grams: g, date, note });
-          await db.txs.put(editTx);
-          const all = await db.txs.byBean(bean.id);
-          bean.remainingWeight = calcRemaining(bean, all);
-          await db.beans.put(bean);
-          toast('分豆记录已更新 ✎', 'ok');
-          close();
-          rerender();
-          return;
-        }
-        await addTx(bean.id, { type: 'share', grams: g, date, note });
-        vibrate(10);
-        toast(`已分出 ${fmtG(g)}g 🎁`, 'ok');
+        toast((Number(nb.remainingWeight) || 0) <= 0
+          ? `冲煮 ${fmtG(g)}g 已记录，这包喝完了 → 自动归档 📦`
+          : `冲煮 ${fmtG(g)}g 已记录 ☕`, 'ok');
         close();
         rerender();
       };
@@ -581,9 +528,7 @@ function adjustSheet(bean, editTx = null) {
           if (isNaN(val)) { toast('请输入有效克数', 'err'); return; }
           Object.assign(editTx, { grams: val, date, note: note || (val > 0 ? '补入' : '修正') });
           await db.txs.put(editTx);
-          const all = await db.txs.byBean(bean.id);
-          bean.remainingWeight = calcRemaining(bean, all);
-          await db.beans.put(bean);
+          await recalcBean(bean);
           toast('修正记录已更新 ✎', 'ok');
           close();
           rerender();
@@ -592,12 +537,14 @@ function adjustSheet(bean, editTx = null) {
         if (isNaN(val) || val < 0) { toast('请输入有效克数', 'err'); return; }
         const delta = Math.round((val - (Number(bean.remainingWeight) || 0)) * 10) / 10;
         if (delta === 0) { toast('克重没有变化'); close(); return; }
-        await addTx(bean.id, {
+        const { bean: nb } = await addTx(bean.id, {
           type: 'adjust', grams: delta,
           date,
           note: note || (delta > 0 ? '补入' : '修正'),
         });
-        toast(`已修正为 ${fmtG(val)}g`, 'ok');
+        toast((Number(nb.remainingWeight) || 0) <= 0
+          ? `已修正为 ${fmtG(val)}g，喝完自动归档 📦`
+          : `已修正为 ${fmtG(val)}g`, 'ok');
         close();
         rerender();
       };

@@ -92,6 +92,20 @@ export const db = {
   },
 };
 
+/* 流水变化后统一重算余量；归零自动归档。
+   编辑历史流水也必须走这里，避免“新增会归档、编辑不会”的状态分叉。 */
+export async function recalcBean(bean) {
+  const all = await db.txs.byBean(bean.id);
+  bean.remainingWeight = calcRemaining(bean, all);
+  bean.updatedAt = Date.now();
+  if ((Number(bean.remainingWeight) || 0) <= 0 && !bean.archived) {
+    bean.archived = true;
+    bean.archivedAt = Date.now();
+  }
+  await db.beans.put(bean);
+  return bean;
+}
+
 /* 记一笔流水并同步豆子剩余克重 */
 export async function addTx(beanId, data) {
   const bean = await db.beans.get(beanId);
@@ -109,10 +123,7 @@ export async function addTx(beanId, data) {
     params: data.params || null,   // {temp,water,ratio,grind} 冲煮参数
   };
   await db.txs.put(t);
-  const all = await db.txs.byBean(beanId);
-  bean.remainingWeight = calcRemaining(bean, all);
-  bean.updatedAt = Date.now();
-  await db.beans.put(bean);
+  await recalcBean(bean);
   return { tx: t, bean };
 }
 
