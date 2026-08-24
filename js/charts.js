@@ -14,20 +14,26 @@ export function barChart(items, { unit = '', labelAlign = 'end' } = {}) {
   const H = top + items.length * rowH + 4;
   const max = Math.max(...items.map((i) => i.value), 1);
   const valW = 34;
+  /* 全图共用同一标签列宽，避免名称长度不同导致每根柱子的起点错位。 */
+  const labelNeed = Math.max(...items.map((it) => {
+    const chars = [...String(it.label)].length;
+    const fs = chars <= 4 ? 12 : chars <= 6 ? 11 : chars <= 10 ? 10 : 9;
+    return chars * fs + 12;
+  }));
+  const labelW = Math.min(150, Math.max(54, labelNeed));
+  const x0 = labelW + 6;
+  const barMax = W - valW - 4 - x0;
 
   let out = '';
   items.forEach((it, idx) => {
     const y = top + idx * rowH;
     const chars = [...String(it.label)].length;
-    /* 名字越长字号越小、标签区越宽；条形区相应收缩 */
+    /* 名字越长字号越小；超出统一标签列时压缩到列内。 */
     const fs = chars <= 4 ? 12 : chars <= 6 ? 11 : chars <= 10 ? 10 : 9;
-    const labelW = Math.min(180, Math.max(54, chars * fs + 12));
-    const x0 = labelW + 4;
-    const barMax = W - valW - 4 - x0;
     const bw = Math.max(4, (barMax * it.value) / max);
     const estimated = chars * fs;
     const fit = estimated > labelW - 4 ? ` textLength="${labelW - 4}" lengthAdjust="spacingAndGlyphs"` : '';
-    const labelX = labelAlign === 'start' ? 0 : labelW;
+    const labelX = labelAlign === 'start' ? 0 : labelW - 2;
     const anchor = labelAlign === 'start' ? 'start' : 'end';
     out += `
       <text x="${labelX}" y="${y + 17}" text-anchor="${anchor}" font-size="${fs}" fill="#7A6B5C"${fit}>${esc2(it.label)}</text>
