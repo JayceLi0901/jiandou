@@ -152,7 +152,7 @@ export async function render(view, params) {
         engine: await db.settings.get('engine', 'local'),
         apiKey: await db.settings.get('apiKey', ''),
         apiBase: await db.settings.get('apiBase', 'https://open.bigmodel.cn/api/paas/v4'),
-        model: await db.settings.get('model', 'glm-4v-flash'),
+        model: await db.settings.get('model', 'glm-4.6v-flash'),
       };
       const fields = await recognize(file, cfg, (msg) => {
         statusEl.querySelector('#ocr-txt').textContent = msg;
@@ -169,7 +169,12 @@ export async function render(view, params) {
         }
       }
       const n = Object.values(fields || {}).filter((v) => v != null && v !== '').length;
-      statusEl.innerHTML = `<span>${filled ? `✓ 已识别 ${n} 项，已自动填入 ${filled} 项空位` : '未能提取出有效字段，请手动填写'}</span>`;
+      const cloud = cfg.engine === 'cloud' && cfg.apiKey;
+      statusEl.innerHTML = filled
+        ? `<span>✓ 已识别 ${n} 项，已自动填入 ${filled} 项空位，请核对</span>`
+        : cloud
+          ? '<span>云端未提取出有效字段，请手动填写</span>'
+          : '<span>本地识别效果不佳。建议到 设置 → 识别引擎 填入免费 API Key，开启云端 AI 直识别（更准）</span>';
       if (n) toast('识别完成，请核对信息', 'ok');
     } catch (e) {
       statusEl.innerHTML = `<span>识别失败（${esc(e.message)}），可手动填写或稍后重试</span>`;

@@ -9,7 +9,7 @@ export async function render(view) {
   const engine = await db.settings.get('engine', 'local');
   const apiKey = await db.settings.get('apiKey', '');
   const apiBase = await db.settings.get('apiBase', 'https://open.bigmodel.cn/api/paas/v4');
-  const model = await db.settings.get('model', 'glm-4v-flash');
+  const model = await db.settings.get('model', 'glm-4.6v-flash');
   const beanCount = (await db.beans.all()).length;
   const txCount = (await db.txs.all()).length;
   const lastBackupAt = await db.settings.get('lastBackupAt', null);
@@ -71,12 +71,15 @@ export async function render(view) {
             <input type="text" id="cfg-base" value="${apiBase}" placeholder="https://open.bigmodel.cn/api/paas/v4"/></div>
           <div class="field-row">
             <div class="field"><label>模型</label>
-              <input type="text" id="cfg-model" value="${model}" placeholder="glm-4v-flash"/></div>
+              <input type="text" id="cfg-model" value="${model}" placeholder="glm-4.6v-flash"/></div>
             <div class="field"><label>API Key</label>
               <input type="password" id="cfg-key" value="${apiKey}" placeholder="仅保存在本机"/></div>
           </div>
-          <button class="btn soft block sm" id="cfg-save">保存配置</button>
-          <div class="muted" style="margin-top:8px;">智能解析与云端识别共用 · 智谱 open.bigmodel.cn 的 glm-4v-flash 目前免费</div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn soft sm" style="flex:1;" id="cfg-save">保存配置</button>
+            <button class="btn ghost sm" style="flex:1;" id="cfg-test">测试可用性</button>
+          </div>
+          <div class="muted" style="margin-top:8px;">智能解析与云端识别共用 · 智谱 open.bigmodel.cn 的 glm-4.6v-flash 目前免费（老 glm-4v-flash 也可用）</div>
         </div>
       </div>
     </div>
@@ -120,7 +123,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.13.0</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.13.1</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">持久存储</span><span class="v" id="persist-status">检测中…</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
@@ -135,6 +138,11 @@ export async function render(view) {
     const btn = e.target.closest('button');
     if (!btn) return;
     const val = btn.dataset.e;
+    if (val === 'cloud' && !apiKey) {
+      toast('先在下方填入 API Key 并保存', 'err');
+      $('#cloud-cfg').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     await db.settings.set('engine', val);
     $('#engine-seg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
     $('#engine-hint').textContent = val === 'local'
@@ -145,9 +153,29 @@ export async function render(view) {
 
   $('#cfg-save')?.addEventListener('click', async () => {
     await db.settings.set('apiBase', $('#cfg-base').value.trim() || 'https://open.bigmodel.cn/api/paas/v4');
-    await db.settings.set('model', $('#cfg-model').value.trim() || 'glm-4v-flash');
+    await db.settings.set('model', $('#cfg-model').value.trim() || 'glm-4.6v-flash');
     await db.settings.set('apiKey', $('#cfg-key').value.trim());
     toast('识别配置已保存', 'ok');
+  });
+
+  /* 一键测试识别配置是否可用 */
+  $('#cfg-test')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true; const old = btn.textContent; btn.textContent = '测试中…';
+    try {
+      const base = $('#cfg-base').value.trim() || 'https://open.bigmodel.cn/api/paas/v4';
+      const res = await fetch(base.replace(/\/+$/, '') + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + $('#cfg-key').value.trim() },
+        body: JSON.stringify({ model: $('#cfg-model').value.trim() || 'glm-4.6v-flash', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      });
+      if (res.ok) toast('配置可用 ✓', 'ok');
+      else {
+        let detail = ''; try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
+        toast('HTTP ' + res.status + (detail ? '：' + detail : ''), 'err');
+      }
+    } catch (err) { toast('网络错误：' + err.message, 'err'); }
+    btn.disabled = false; btn.textContent = old;
   });
 
   /* 备份 */

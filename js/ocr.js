@@ -1,7 +1,7 @@
 /* 鉴豆 · 识别引擎
    本地：Tesseract.js（资源自托管，离线可用）
-   云端：OpenAI 兼容视觉模型（设置页填 Key 后启用，预留）
-   解析：本地 OCR 文本 → 规则提取结构化字段 */
+   云端：OpenAI 兼容视觉模型（设置页填 Key 后启用，默认智谱 glm-4.6v-flash，免费）
+   解析：本地 OCR 文本 → 大模型/规则提取结构化字段 */
 
 let tesseractLoading = null;
 
@@ -73,7 +73,7 @@ ${text.slice(0, 1500)}`;
   return JSON.parse(m[0]);
 }
 
-/* ---------- 云端视觉大模型（预留） ---------- */
+/* ---------- 云端视觉大模型（照片直识别，抗透视/模糊/光照不均） ---------- */
 export async function recognizeCloud(file, cfg, onStatus) {
   onStatus && onStatus('云端 AI 识别中…', null);
   const b64 = await new Promise((res, rej) => {
@@ -83,27 +83,34 @@ export async function recognizeCloud(file, cfg, onStatus) {
     r.readAsDataURL(file);
   });
   const endpoint = cfg.apiBase.replace(/\/+$/, '') + '/chat/completions';
-  const prompt = `你是咖啡豆包装标签识别助手。请仔细看这张咖啡豆包装袋照片，提取以下信息，以严格 JSON 输出（不要 markdown 代码块，识别不到的字段填 null，绝不编造）：{"name":"产品名","roaster":"烘焙商","origin":"产地(国家·产区)","estate":"庄园/处理厂","variety":"豆种","process":"处理法","roastDate":"YYYY-MM-DD 或 null","flavors":"风味描述","totalWeight":克重数字或null}`;
-
+  const prompt = `你是咖啡豆包装标签识别助手。请仔细看这张咖啡豆包装袋照片（可能有透视变形、反光、模糊），逐区扫描正面与侧面文字，提取以下信息，以严格 JSON 输出（不要 markdown 代码块，识别不到的字段填 null，绝不编造）：{"name":"产品名","roaster":"烘焙商","origin":"产地(国家·产区)","estate":"庄园/处理厂","variety":"豆种","process":"处理法","roastDate":"YYYY-MM-DD 或 null","flavors":"风味描述","totalWeight":克重数字或null}`;
+  const is46v = /4\.6v/i.test(cfg.model || '');
+  const body = {
+    model: cfg.model,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
+        { type: 'text', text: prompt },
+      ],
+    }],
+    temperature: 0.1,
+  };
+  /* GLM-4.6V 系列默认开思考，信息提取任务关掉更快更稳 */
+  if (is46v) body.thinking = { type: 'disabled' };
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + cfg.apiKey,
     },
-    body: JSON.stringify({
-      model: cfg.model,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
-          { type: 'text', text: prompt },
-        ],
-      }],
-      temperature: 0.1,
-    }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('云端识别请求失败：HTTP ' + res.status);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
+    throw new Error('云端识别请求失败：HTTP ' + res.status + (detail ? '（' + detail + '）' : ''));
+  }
   const j = await res.json();
   let content = j?.choices?.[0]?.message?.content || '';
   content = content.replace(/```(json)?/g, '').trim();
