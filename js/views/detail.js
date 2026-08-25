@@ -106,10 +106,10 @@ async function draw(view, full) {
         : `<div class="muted" style="padding:16px 0;">下次记录冲煮时顺手打个分，这里会生成你的风味雷达图 ☕</div>`}
     </div>
 
-    <div class="card">
-      <div class="card-title">流水记录<b>${txs.length}</b></div>
+    <section class="tx-section">
+      <div class="tx-section-title">流水记录</div>
       <div id="tx-list">${txListHtml(txs) || '<div class="muted" style="padding:14px 0;">还没有流水，冲煮或修正克重后会记录在这里</div>'}</div>
-    </div>
+    </section>
 
     ${bean.archived ? '' : `<div class="mt-8"><button class="btn danger block sm" id="act-del-bottom" style="display:none;">删除</button></div>`}
   `;
@@ -160,7 +160,7 @@ async function draw(view, full) {
   view.querySelectorAll('.tx-card').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tx = txs.find((t) => t.id === btn.dataset.id);
-      if (tx) exportTxCard(bean, tx, txs);
+      if (tx) exportTxCard(bean, tx);
     });
   });
 

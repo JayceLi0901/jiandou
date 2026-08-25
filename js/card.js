@@ -1,5 +1,5 @@
-/* 鉴豆 · 流水分享卡片：单笔记录 + 当前平均评分 → Canvas 绘制 → PNG 保存 */
-import { RATING_DIMS, avgRatings, fmtG, fmtDuration } from './util.js';
+/* 鉴豆 · 流水分享卡片：单笔记录 + 该笔评分 → Canvas 绘制 → PNG 保存 */
+import { RATING_DIMS, ratingScores, fmtG, fmtDuration } from './util.js';
 import { toast } from './ui.js';
 
 const CREAM = '#F6F1E8', CARD = '#FFFDF9', INK = '#2C221A', INK2 = '#7A6B5C', INK3 = '#AE9E8D';
@@ -91,16 +91,28 @@ function drawRadar(ctx, cx, cy, R, avg) {
   });
 }
 
-export async function exportTxCard(bean, tx, txs) {
+export async function exportTxCard(bean, tx) {
   try {
     await document.fonts.ready;
-    const W = 750, PAD = 26;
-    const avg = avgRatings(txs);
-    const p = tx.params || {}, eq = tx.equip || {};
-    const hasRate = !!avg;
+    const W = 750, PAD = 30;
+    const score = tx.rating ? ratingScores(tx.rating) : null;
+    const hasRate = !!score?.overall;
 
-    /* 6 维雷达图+分项需要足够纵向空间，避免较长感受压到页脚 */
-    const H = hasRate ? 920 : (tx.note ? 520 : 450);
+    /* 先按真实文字行数排版，再决定画布高度，避免固定高度造成底部大面积空白。 */
+    const probe = document.createElement('canvas').getContext('2d');
+    const textW = W - (PAD + 38) * 2;
+    probe.font = `14px ${SERIF}`;
+    const ml = metaLine(tx);
+    const metaLines = ml ? wrapText(probe, ml, textW, 3) : [];
+    const noteLines = tx.note ? wrapText(probe, '「' + tx.note + '」', textW, 4) : [];
+    let contentY = PAD + 56;       // 品牌行
+    contentY += 56 + 36 + 30;     // 豆名、烘焙商、分隔线
+    contentY += 54;               // 克重
+    if (metaLines.length) contentY += 38 + metaLines.length * 27;
+    if (noteLines.length) contentY += 34 + noteLines.length * 29;
+    contentY += 34 + 34;          // 评分分隔线与标题
+    contentY += hasRate ? 370 : 48;
+    const H = Math.ceil(contentY + 66); // 页脚与底部留白
 
     const scale = 2;
     const cv = document.createElement('canvas');
@@ -112,8 +124,8 @@ export async function exportTxCard(bean, tx, txs) {
     ctx.fillStyle = CREAM; ctx.fillRect(0, 0, W, H);
     roundRect(ctx, PAD, PAD, W - PAD * 2, H - PAD * 2, 26);
     ctx.fillStyle = CARD; ctx.fill();
-    const L = PAD + 30, R = W - PAD - 30;
-    let y = PAD + 52;
+    const L = PAD + 38, R = W - PAD - 38;
+    let y = PAD + 56;
 
     /* 品牌行 */
     ctx.textAlign = 'left';
@@ -127,22 +139,22 @@ export async function exportTxCard(bean, tx, txs) {
     ctx.textAlign = 'left';
 
     /* 豆名 + 烘焙商 */
-    y += 46;
+    y += 56;
     ctx.font = `700 34px ${SERIF}`;
     ctx.fillStyle = INK;
     ctx.fillText((bean.name || '未命名').slice(0, 16), L, y);
-    y += 30;
+    y += 36;
     ctx.font = `16px ${SERIF}`;
     ctx.fillStyle = INK2;
     ctx.fillText([bean.roaster, bean.origin].filter(Boolean).join(' · ').slice(0, 24), L, y);
 
     /* 分隔线 */
-    y += 24;
+    y += 30;
     ctx.strokeStyle = HAIR; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke();
 
     /* 冲煮信息 */
-    y += 42;
+    y += 54;
     const gramsText = fmtG(tx.grams);
     ctx.font = `700 48px ${NUM}`;
     ctx.fillStyle = ACCENT_DEEP;
@@ -156,35 +168,34 @@ export async function exportTxCard(bean, tx, txs) {
     ctx.font = `17px ${SERIF}`;
     ctx.fillStyle = INK2;
     ctx.fillText(tx.type === 'brew' ? '冲煮' : tx.type === 'share' ? '分豆' : '修正', unitX + unitW + 24, y - 7);
-    const ml = metaLine(tx);
-    if (ml) {
-      y += 30;
+    if (metaLines.length) {
+      y += 38;
       ctx.font = `14px ${SERIF}`;
       ctx.fillStyle = INK2;
-      for (const ln of wrapText(ctx, ml, R - L, 2)) { ctx.fillText(ln, L, y); y += 22; }
+      for (const ln of metaLines) { ctx.fillText(ln, L, y); y += 27; }
     }
-    if (tx.note) {
-      y += 26;
+    if (noteLines.length) {
+      y += 34;
       ctx.font = `14px ${SERIF}`;
       ctx.fillStyle = INK2;
-      for (const ln of wrapText(ctx, '「' + tx.note + '」', R - L, 2)) { ctx.fillText(ln, L, y); y += 22; }
+      for (const ln of noteLines) { ctx.fillText(ln, L, y); y += 29; }
     }
 
     /* 评分区 */
+    y += 34;
+    ctx.strokeStyle = HAIR;
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke();
+    y += 34;
+    ctx.font = `600 13px ${SERIF}`;
+    ctx.fillStyle = INK3;
+    ctx.fillText('本 次 风 味 评 分', L, y);
     if (hasRate) {
-      y += 22;
-      ctx.strokeStyle = HAIR;
-      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke();
-      y += 26;
-      ctx.font = `600 13px ${SERIF}`;
-      ctx.fillStyle = INK3;
-      ctx.fillText('风 味 评 分 · 平 均', L, y);
-      const radarCy = y + 150;
-      drawRadar(ctx, L + 128, radarCy, 104, avg);
+      const radarCy = y + 158;
+      drawRadar(ctx, L + 128, radarCy, 104, score);
       /* 右侧分维列表 */
-      let ly = y + 24;
+      let ly = y + 30;
       RATING_DIMS.forEach((d) => {
-        const v = avg[d.key] || 0;
+        const v = score[d.key] || 0;
         ctx.font = `15px ${SERIF}`; ctx.textAlign = 'left'; ctx.fillStyle = INK2;
         ctx.fillText(d.label, L + 300, ly + 5);
         ctx.fillStyle = '#EFE7D9';
@@ -193,21 +204,26 @@ export async function exportTxCard(bean, tx, txs) {
         roundRect(ctx, L + 360, ly - 6, Math.max(6, 220 * Math.min(v, 10) / 10), 10, 5); ctx.fill();
         ctx.font = `700 19px ${NUM}`; ctx.fillStyle = ACCENT_DEEP;
         ctx.fillText(String(v), L + 596, ly + 6);
-        ly += 38;
+        ly += 40;
       });
-      /* 整体均分 */
+      /* 本次自动得分 */
       ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
-      ctx.fillText('整体均分', L + 300, ly + 16);
+      ctx.fillText('本次得分', L + 300, ly + 18);
       ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
-      ctx.fillText(String(avg.overall), L + 300, ly + 74);
-      y = Math.max(ly + 86, radarCy + 138);
+      ctx.fillText(String(score.overall), L + 300, ly + 80);
+      y = Math.max(ly + 96, radarCy + 146);
+    } else {
+      y += 48;
+      ctx.font = `15px ${SERIF}`;
+      ctx.fillStyle = INK2;
+      ctx.fillText('本次未评分', L, y);
     }
 
-    /* 页脚 */
+    /* 页脚紧随内容，保留呼吸感但不制造无效空白。 */
     ctx.textAlign = 'right';
     ctx.font = `12px ${SERIF}`;
     ctx.fillStyle = INK3;
-    ctx.fillText('鉴豆 · 咖啡豆管家', R, H - PAD - 22);
+    ctx.fillText('鉴豆 · 咖啡豆管家', R, H - PAD - 20);
     ctx.textAlign = 'left';
 
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));

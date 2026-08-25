@@ -524,12 +524,22 @@ input[type="range"].rate::-moz-range-thumb {
 .act-btn.danger-act svg, .act-btn.danger-act { color: var(--danger); }
 
 /* 流水时间线 */
+.tx-section { margin-bottom: 14px; }
+.tx-section-title {
+  margin: 2px 3px 12px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .24em;
+}
+#tx-list { display: grid; gap: 11px; }
 .tx-item {
   display: flex; gap: 12px; align-items: flex-start;
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--hairline);
+  padding: 15px 13px;
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
-.tx-item:last-child { border-bottom: none; }
 .tx-ic {
   width: 34px; height: 34px;
   border-radius: 11px;
