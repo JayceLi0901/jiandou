@@ -724,6 +724,17 @@ input[type="range"].rate::-moz-range-thumb {
 #app.sub .tabbar { display: none; }
 #app.sub .view { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
 
+.skip-photo-wrap { display:flex; justify-content:center; margin:8px 0 14px; }
+.skip-photo-btn {
+  min-height:36px; display:inline-flex; align-items:center; gap:5px;
+  padding:7px 13px; border:0; border-radius:999px;
+  background:var(--accent-ghost); color:var(--accent-deep);
+  font:600 12.5px var(--sans); cursor:pointer;
+  transition:background .15s ease, transform .15s ease;
+}
+.skip-photo-btn svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.skip-photo-btn:active { background:var(--accent-soft); transform:scale(.97); }
+
 /* ---------------- 器具库 ---------------- */
 .eq-item {
   display: flex; align-items: center; gap: 8px;
@@ -732,6 +743,13 @@ input[type="range"].rate::-moz-range-thumb {
 }
 .eq-item:last-child { border-bottom: none; }
 .eq-name { flex: 1; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-rename {
+  min-height: 36px; padding: 6px 8px; margin: -6px 0;
+  border: none; border-radius: 9px; background: transparent;
+  color: var(--ink); font-family: var(--sans); text-align: left;
+  cursor: pointer; transition: background .15s ease, transform .15s ease;
+}
+.eq-rename:active { background: var(--accent-ghost); transform: scale(.985); }
 .eq-hint { font-size: 11px; color: var(--ink-3); }
 .eq-star {
   border: none; background: none;
@@ -766,16 +784,26 @@ input[type="range"].rate::-moz-range-thumb {
 
 /* 流水里的冲煮参数行 */
 .tx-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.6; }
-.tx-acts { display: flex; flex-direction: column; align-self: flex-start; flex-shrink: 0; }
+.tx-acts { display: flex; flex-direction: column; gap: 2px; align-self: flex-start; flex-shrink: 0; }
 .tx-edit, .tx-card {
-  border: none; background: none;
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border: none; border-radius: 11px; background: transparent;
   color: var(--ink-3);
-  font-size: 14px;
-  padding: 3px 4px 3px 10px;
+  padding: 0;
   cursor: pointer;
   flex-shrink: 0;
+  transition: color .15s ease, background .15s ease, transform .15s ease;
 }
-.tx-edit:active, .tx-card:active { color: var(--accent-deep); }
+.tx-edit svg, .tx-card svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.tx-edit:active, .tx-card:active { color: var(--accent-deep); background: var(--accent-ghost); transform: scale(.94); }
+
+/* 长冲煮表单的主操作始终留在拇指可触达区域 */
+.sheet-save-bar {
+  position: sticky; z-index: 4; bottom: 0;
+  margin: 10px -18px -20px;
+  padding: 18px 18px calc(env(safe-area-inset-bottom) + 14px);
+  background: linear-gradient(to bottom, rgba(246,241,232,0), var(--bg) 28%);
+}
 
 /* 环形图交互 */
 .donut-seg { cursor: pointer; transition: opacity .18s ease; }

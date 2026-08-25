@@ -38,7 +38,7 @@ export async function render(view, params) {
       <div class="ocr-status" id="ocr-status" hidden></div>
     </div>
     <input type="file" id="photo-input" accept="image/*" capture="environment" hidden/>
-    ${editing ? '' : `<div class="muted mt-8" style="margin-bottom:14px;"><a href="#/" id="skip-photo" style="color:var(--accent-deep);text-decoration:none;">跳过拍照，手动填写 →</a></div>`}
+    ${editing ? '' : `<div class="skip-photo-wrap"><button type="button" class="skip-photo-btn" id="skip-photo">直接手动填写 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button></div>`}
 
     <div class="form-card">
       <div class="field"><label>豆子名称 *</label>

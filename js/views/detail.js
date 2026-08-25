@@ -227,8 +227,12 @@ function txListHtml(txs) {
         ${ratingHtml}
       </div>
       <div class="tx-acts">
-        <button class="tx-edit" data-id="${t.id}" aria-label="编辑此记录">✎</button>
-        <button class="tx-card" data-id="${t.id}" aria-label="生成分享卡片">⤓</button>
+        <button class="tx-edit" data-id="${t.id}" aria-label="编辑此记录" title="编辑">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.1L19 9.1a2.1 2.1 0 0 0 0-3L17.9 5a2.1 2.1 0 0 0-3 0L4 15.9V20Z"/><path d="m13.8 6.2 4 4"/></svg>
+        </button>
+        <button class="tx-card" data-id="${t.id}" aria-label="保存流水图片" title="保存图片">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M5 18v2h14v-2"/></svg>
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -341,7 +345,7 @@ async function brewSheet(bean, editTx = null) {
       <div class="muted" style="text-align:left;margin-bottom:10px;">花香/果香/甜感/余韵：越高越好，0 = 不适用 · 酸质与 Body 记强度感受，5 为完美平衡，偏离扣分 · 整体自动算平均</div>
     </div>
 
-    <button class="btn primary block" id="brew-save">记录冲煮</button>`;
+    <div class="sheet-save-bar"><button class="btn primary block" id="brew-save">记录冲煮</button></div>`;
 
   sheet({
     title: editTx ? '✎ 编辑冲煮' : `☕ ${bean.name || '冲煮'}`,

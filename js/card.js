@@ -143,12 +143,19 @@ export async function exportTxCard(bean, tx, txs) {
 
     /* 冲煮信息 */
     y += 42;
-    ctx.font = `700 40px ${NUM}`;
+    const gramsText = fmtG(tx.grams);
+    ctx.font = `700 48px ${NUM}`;
     ctx.fillStyle = ACCENT_DEEP;
-    ctx.fillText(fmtG(tx.grams) + 'g', L, y);
+    ctx.fillText(gramsText, L, y);
+    const gramsW = ctx.measureText(gramsText).width;
+    ctx.font = `600 19px ${SERIF}`;
+    ctx.fillStyle = INK3;
+    const unitX = L + gramsW + 5;
+    ctx.fillText('g', unitX, y - 2);
+    const unitW = ctx.measureText('g').width;
     ctx.font = `17px ${SERIF}`;
-    ctx.fillStyle = INK;
-    ctx.fillText(tx.type === 'brew' ? '冲煮' : tx.type === 'share' ? '分豆' : '修正', L + 118, y - 6);
+    ctx.fillStyle = INK2;
+    ctx.fillText(tx.type === 'brew' ? '冲煮' : tx.type === 'share' ? '分豆' : '修正', unitX + unitW + 24, y - 7);
     const ml = metaLine(tx);
     if (ml) {
       y += 30;

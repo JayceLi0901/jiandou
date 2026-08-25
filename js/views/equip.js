@@ -33,7 +33,7 @@ async function draw(body) {
     const rows = list.length
       ? list.map((i) => `
         <div class="eq-item" data-id="${i.id}">
-          <span class="eq-name">${esc(i.name)}</span>
+          <button class="eq-name eq-rename" data-act="rename" title="点击重命名">${esc(i.name)}</button>
           <button class="eq-star ${i.isDefault ? 'on' : ''}" data-act="default" title="设为默认">${i.isDefault ? '★' : '☆'}</button>
           <button class="eq-del" data-act="del" title="删除">✕</button>
         </div>`).join('')
@@ -74,6 +74,11 @@ async function draw(body) {
   /* 行操作：设默认 / 删除 / 长按(右键)重命名 */
   body.querySelectorAll('.eq-item[data-id]').forEach((row) => {
     const id = row.dataset.id;
+    row.querySelector('[data-act="rename"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = items.find((i) => i.id === id);
+      addOrRename(body, item.cat, null, item);
+    });
     row.querySelector('[data-act="default"]').addEventListener('click', async (e) => {
       e.stopPropagation();
       const item = items.find((i) => i.id === id);
