@@ -179,6 +179,14 @@ async function draw(view, full) {
     toast('已恢复在喝');
     draw(view, await getBeanFull(bean.id));
   });
+
+  /* 若 App 在冲煮弹层打开时被系统重载，回到详情后自动续写。 */
+  if (!bean.archived) {
+    const pending = activeBrewDraft(bean.id, txs);
+    if (pending) requestAnimationFrame(() => {
+      if (!document.querySelector('.sheet')) brewSheet(bean, pending.editTx);
+    });
+  }
 }
 
 /* ---------------- 流水列表 ---------------- */
@@ -246,6 +254,75 @@ const EQUIP_CATS = [
   { key: 'grinder', label: '磨豆机' },
 ];
 
+/* 未完成冲煮草稿：按豆子+记录隔离，保留 7 天。 */
+const BREW_DRAFT_PREFIX = 'jiandou-brew-draft:';
+const BREW_DRAFT_TTL = 7 * 86400000;
+const brewDraftKey = (beanId, editTx = null) => `${BREW_DRAFT_PREFIX}${beanId}:${editTx ? editTx.id : 'new'}`;
+
+function readBrewDraft(key) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || 'null');
+    if (!draft || Date.now() - Number(draft.savedAt || 0) > BREW_DRAFT_TTL) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return draft;
+  } catch (_) { return null; }
+}
+
+function activeBrewDraft(beanId, txs) {
+  const prefix = `${BREW_DRAFT_PREFIX}${beanId}:`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const draft = readBrewDraft(key);
+    if (!draft?.active) continue;
+    const editTx = draft.editTxId ? txs.find((t) => t.id === draft.editTxId && t.type === 'brew') : null;
+    if (!draft.editTxId || editTx) return { draft, editTx };
+  }
+  return null;
+}
+
+/* 只允许从圆点附近起手拖动；点横轴、轻触不改分，也不获取输入焦点。 */
+function wireDragOnlyRange(range, onValue) {
+  let dragging = false;
+  const position = (clientX) => {
+    const rect = range.getBoundingClientRect();
+    const min = Number(range.min), max = Number(range.max), step = Number(range.step) || 1;
+    const left = rect.left + 11, width = Math.max(1, rect.width - 22);
+    const raw = min + Math.max(0, Math.min(1, (clientX - left) / width)) * (max - min);
+    return Math.max(min, Math.min(max, Math.round(raw / step) * step));
+  };
+  range.tabIndex = -1;
+  range.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    document.activeElement?.blur?.();
+    const rect = range.getBoundingClientRect();
+    const min = Number(range.min), max = Number(range.max);
+    const thumbX = rect.left + 11 + ((Number(range.value) - min) / (max - min)) * Math.max(1, rect.width - 22);
+    if (Math.abs(e.clientX - thumbX) > 26) return;
+    dragging = true;
+    range.setPointerCapture?.(e.pointerId);
+  });
+  range.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const next = position(e.clientX);
+    if (Number(range.value) !== next) { range.value = String(next); onValue(); }
+  });
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    range.releasePointerCapture?.(e.pointerId);
+    range.blur();
+  };
+  range.addEventListener('pointerup', end);
+  range.addEventListener('pointercancel', end);
+  range.addEventListener('click', (e) => e.preventDefault());
+  range.addEventListener('keydown', (e) => e.preventDefault());
+}
+
 /* 弹层里新增一件器具（保存后自动选用） */
 function promptNewEquip(catLabel) {
   return new Promise((resolve) => {
@@ -278,6 +355,11 @@ async function brewSheet(bean, editTx = null) {
   const items = await db.equip.all();
   const lastEquip = (await db.settings.get('lastEquip', {})) || {};
   const lastParams = (await db.settings.get('lastParams', {})) || {};
+  const draftKey = brewDraftKey(bean.id, editTx);
+  const draft = readBrewDraft(draftKey);
+  let saveDraftNow = () => {};
+  let cleanupDraft = () => {};
+  let draftCommitted = false;
   const P = editTx && editTx.params ? editTx.params : null;
   const durStr = P && P.duration != null
     ? (Math.floor(P.duration / 60) ? `${Math.floor(P.duration / 60)}:${String(P.duration % 60).padStart(2, '0')}` : String(P.duration))
@@ -350,6 +432,10 @@ async function brewSheet(bean, editTx = null) {
   sheet({
     title: editTx ? '✎ 编辑冲煮' : `☕ ${bean.name || '冲煮'}`,
     html,
+    onClose() {
+      cleanupDraft();
+      if (!draftCommitted) saveDraftNow(false);
+    },
     async onMount(el, close) {
       const gEl = el.querySelector('#brew-g');
       const ratioSel = el.querySelector('#brew-ratio');
@@ -359,7 +445,7 @@ async function brewSheet(bean, editTx = null) {
       const dateEl = el.querySelector('#brew-date');
       dateEl.addEventListener('click', async () => {
         const v = await datePickerSheet({ value: dateEl.value, title: '冲煮日期' });
-        if (v) dateEl.value = v;
+        if (v) { dateEl.value = v; saveDraftNow(true, true); }
       });
 
       /* 水量自动按 粉量 × 粉水比 计算，手动改过或编辑回填则尊重手输 */
@@ -402,6 +488,7 @@ async function brewSheet(bean, editTx = null) {
             fillSelect(sel, cat);
             sel.value = name;
             toast(`已添加${catLabel}「${name}」`, 'ok');
+            saveDraftNow(true, true);
           } else {
             sel.value = '';
           }
@@ -418,6 +505,7 @@ async function brewSheet(bean, editTx = null) {
           el.querySelectorAll('.quick-pill').forEach((x) => x.classList.toggle('on', x === p));
           gEl.value = p.dataset.g;
           syncWater();
+          saveDraftNow(true, true);
         };
       });
       gEl.addEventListener('input', syncPills);
@@ -426,23 +514,92 @@ async function brewSheet(bean, editTx = null) {
       /* 评分开关（编辑时回填已有评分） */
       const on = el.querySelector('#brew-rate-on');
       on.onchange = () => { el.querySelector('#brew-rates').hidden = !on.checked; };
-      el.querySelectorAll('input[type="range"].rate').forEach((r) => {
-        r.oninput = () => {
+      const ranges = el.querySelectorAll('input[type="range"].rate');
+      const paintRate = (r) => {
           const v = Number(r.value);
           el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${centerScore(v)}分` : v.toFixed(1);
-        };
-      });
+      };
+      ranges.forEach((r) => wireDragOnlyRange(r, () => { paintRate(r); saveDraftNow(true, true); }));
       if (editTx && editTx.rating) {
         on.checked = true;
         el.querySelector('#brew-rates').hidden = false;
-        el.querySelectorAll('input[type="range"].rate').forEach((r) => {
+        ranges.forEach((r) => {
           const v = editTx.rating[r.dataset.k];
-          if (v != null) {
-            r.value = v;
-            el.querySelector('#rv-' + r.dataset.k).textContent = r.dataset.special ? `${v} → ${centerScore(v)}分` : Number(v).toFixed(1);
-          }
+          if (v != null) { r.value = v; paintRate(r); }
         });
       }
+
+      /* 恢复同一豆子/同一记录的未完成草稿。 */
+      let draftChanged = !!draft?.changed;
+      if (draft?.fields) {
+        const f = draft.fields;
+        const values = {
+          '#brew-g': f.g, '#brew-date': f.date, '#brew-temp': f.temp,
+          '#brew-ratio': f.ratio, '#brew-water': f.water, '#brew-dur': f.duration,
+          '#brew-grind': f.grind, '#brew-bypass': f.bypass, '#brew-note': f.note,
+        };
+        for (const [sel, value] of Object.entries(values)) {
+          if (value != null && el.querySelector(sel)) el.querySelector(sel).value = value;
+        }
+        waterDirty = !!f.waterDirty;
+        selects.forEach((sel) => {
+          const value = f.equip?.[sel.dataset.cat];
+          if (value != null && [...sel.options].some((o) => o.value === value)) sel.value = value;
+        });
+        on.checked = !!f.ratingOn;
+        el.querySelector('#brew-rates').hidden = !on.checked;
+        ranges.forEach((r) => {
+          if (f.ratings?.[r.dataset.k] != null) r.value = f.ratings[r.dataset.k];
+          paintRate(r);
+        });
+        syncPills();
+        if (draftChanged) toast('已恢复上次未完成的冲煮记录', 'ok');
+      }
+
+      let draftTimer = 0;
+      const collectDraft = (active) => {
+        const equip = {};
+        selects.forEach((s) => { if (s.value && s.value !== '__new__') equip[s.dataset.cat] = s.value; });
+        const ratings = {};
+        ranges.forEach((r) => { ratings[r.dataset.k] = Number(r.value); });
+        return {
+          ver: 1, savedAt: Date.now(), active, changed: draftChanged,
+          beanId: bean.id, editTxId: editTx?.id || null,
+          fields: {
+            g: gEl.value, date: dateEl.value, temp: el.querySelector('#brew-temp').value,
+            ratio: ratioSel.value, water: waterEl.value, duration: el.querySelector('#brew-dur').value,
+            grind: el.querySelector('#brew-grind').value, bypass: el.querySelector('#brew-bypass').value,
+            note: el.querySelector('#brew-note').value, equip, waterDirty,
+            ratingOn: on.checked, ratings,
+          },
+        };
+      };
+      saveDraftNow = (active = true, markChanged = false) => {
+        clearTimeout(draftTimer);
+        if (markChanged) draftChanged = true;
+        if (!active && !draftChanged) { localStorage.removeItem(draftKey); return; }
+        try { localStorage.setItem(draftKey, JSON.stringify(collectDraft(active))); } catch (_) {}
+      };
+      const scheduleDraft = () => {
+        draftChanged = true;
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => saveDraftNow(true), 120);
+      };
+      el.querySelectorAll('input:not([type="range"]), textarea, select').forEach((field) => {
+        field.addEventListener('input', scheduleDraft);
+        field.addEventListener('change', scheduleDraft);
+      });
+      const saveOnHide = () => { if (document.hidden) saveDraftNow(true); };
+      const saveOnPageHide = () => saveDraftNow(true);
+      document.addEventListener('visibilitychange', saveOnHide);
+      window.addEventListener('pagehide', saveOnPageHide);
+      cleanupDraft = () => {
+        clearTimeout(draftTimer);
+        document.removeEventListener('visibilitychange', saveOnHide);
+        window.removeEventListener('pagehide', saveOnPageHide);
+      };
+      /* 标记弹层正在填写；若系统此刻回收页面，详情页会自动重开。 */
+      saveDraftNow(true);
 
       /* 保存 */
       el.querySelector('#brew-save').onclick = async () => {
@@ -473,6 +630,7 @@ async function brewSheet(bean, editTx = null) {
           Object.assign(editTx, { grams: g, date, note, rating, equip, params });
           await db.txs.put(editTx);
           await recalcBean(bean);
+          draftCommitted = true; cleanupDraft(); localStorage.removeItem(draftKey);
           vibrate(10);
           toast('冲煮记录已更新 ✎', 'ok');
           close();
@@ -489,6 +647,7 @@ async function brewSheet(bean, editTx = null) {
           type: 'brew', grams: g,
           date, note, rating, equip, params,
         });
+        draftCommitted = true; cleanupDraft(); localStorage.removeItem(draftKey);
         vibrate(10);
         toast((Number(nb.remainingWeight) || 0) <= 0
           ? `冲煮 ${fmtG(g)}g 已记录，这包喝完了 → 自动归档 📦`

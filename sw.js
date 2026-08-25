@@ -1,5 +1,5 @@
 /* 鉴豆 Service Worker — 离线缓存 */
-const VERSION = 'jiandou-v1.11.0';
+const VERSION = 'jiandou-v1.12.0';
 
 const PRECACHE = [
   './',

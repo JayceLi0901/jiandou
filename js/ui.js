@@ -56,22 +56,34 @@ export function sheet({ title = '', html = '', onMount, onClose, dismissable = t
   const body = s.querySelector('.sheet-body');
   if (typeof html === 'string') body.innerHTML = html;
   else if (html) body.appendChild(html);
+  /* 需要常驻的主操作移出滚动区，避免覆盖评分滑条等表单控件。 */
+  const saveBar = body.querySelector(':scope > .sheet-save-bar');
+  if (saveBar) s.appendChild(saveBar);
 
   let closed = false;
+  /* Android WebView 从后台恢复时重新确认裁切，避免旧合成层在圆角处闪黑。 */
+  const stabilize = () => {
+    if (closed || document.hidden) return;
+    s.style.animation = 'none';
+    s.style.transform = 'none';
+    s.style.willChange = 'auto';
+    void s.offsetHeight;
+  };
+  const onVisible = () => { if (!document.hidden) requestAnimationFrame(stabilize); };
   const close = () => {
     if (closed) return;
     closed = true;
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('pageshow', stabilize);
     mask.remove(); s.remove();
     onClose && onClose();
   };
   if (dismissable) mask.addEventListener('click', close);
   root.append(mask, s);
-  /* 动画结束后移除 animation 并固定为独立合成层，防止切后台返回时圆角黑边闪烁 */
-  s.addEventListener('animationend', () => {
-    s.style.animation = 'none';
-    s.style.transform = 'translateZ(0)';
-    s.style.backfaceVisibility = 'hidden';
-  }, { once: true });
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('pageshow', stabilize);
+  /* 入场结束后彻底移除 transform，不让圆角滚动层长期停留在 GPU 合成层。 */
+  s.addEventListener('animationend', stabilize, { once: true });
   onMount && onMount(s, close);
   return { close, el: s };
 }
