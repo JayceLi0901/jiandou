@@ -212,19 +212,19 @@ export async function exportTxCard(bean, tx) {
         ctx.fillText(String(v), L + 596, ly + 8);
         ly += 40;
       });
-      /* 本次得分：整组与右侧评分列（L+300 ~ L+620）水平居中，消除左悬空 */
-      ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
-      const scoreColL = L + 300, scoreColR = L + 620;
+      /* 本次得分：与行尾数字列视觉右缘对齐的「总计行」，标题贴数字左侧 */
       const bigText = String(score.overall);
       ctx.font = `700 56px ${NUM}`;
-      const bigW = ctx.measureText(bigText).width;
-      const scoreCx = (scoreColL + scoreColR) / 2;
-      ctx.textAlign = 'center';
-      ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
-      ctx.fillText('本 次 得 分', scoreCx, ly + 18);
-      ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
-      ctx.fillText(bigText, scoreCx, ly + 80);
+      const mBig = ctx.measureText(bigText);
+      /* actualBoundingBoxRight = 基线原点到字形实际右缘，比锚点对齐更符合视觉 */
+      const inkW = mBig.actualBoundingBoxRight !== undefined ? mBig.actualBoundingBoxRight : mBig.width;
+      const numColR = L + 614; // 行尾数字列的字形右缘（实测校准）
+      const bigX = numColR - inkW; // 让字形右缘落在基准上
       ctx.textAlign = 'left';
+      ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
+      ctx.fillText(bigText, bigX, ly + 80);
+      ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
+      ctx.fillText('本 次 得 分', bigX - 18, ly + 24);
       y = Math.max(ly + 96, radarCy + 146);
     } else {
       y += 48;

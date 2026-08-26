@@ -98,14 +98,28 @@ export async function recognizeCloud(file, cfg, onStatus) {
   };
   /* GLM-4.6V 系列默认开思考，信息提取任务关掉更快更稳 */
   if (is46v) body.thinking = { type: 'disabled' };
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + cfg.apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  /* 免费模型高峰期常见 1302/1305 限流（官方建议稍后重试）：指数退避最多 3 次 */
+  let res = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) {
+      const wait = 2000 * Math.pow(2, attempt - 1); // 2s / 4s / 8s
+      onStatus && onStatus(`访问量大，${wait / 1000} 秒后自动重试（第 ${attempt}/3 次）…`, null);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+    /* 429 / 5xx 或智谱 1302/1305 限流才重试，其它错误（如 401 Key 无效）直接抛 */
+    const jErr = res.ok ? null : await res.clone().json().catch(() => null);
+    const code = jErr?.error?.code;
+    const retryable = res.status === 429 || res.status >= 500 || code === '1302' || code === '1305' || code === 1113;
+    if (res.ok || !retryable) break;
+  }
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
