@@ -81,14 +81,20 @@ function drawRadar(ctx, cx, cy, R, avg) {
     const [x, y] = pt(i, R * v);
     ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fillStyle = ACCENT_DEEP; ctx.fill();
   });
-  /* 维度标签 */
+  /* 维度标签：上/下顶点居中，左右侧顶点按切向外推（与 charts.js SVG 雷达一致） */
   ctx.font = `12px ${SERIF}`;
   ctx.fillStyle = INK2;
-  ctx.textAlign = 'center';
   dims.forEach((d, i) => {
     const [x, y] = pt(i, R + 18);
-    ctx.fillText(d.label, x, y + 4);
+    if (Math.abs(x - cx) < 8) {
+      ctx.textAlign = 'center';
+      ctx.fillText(d.label, x, y + 4);
+    } else {
+      ctx.textAlign = x > cx ? 'left' : 'right';
+      ctx.fillText(d.label, x + (x > cx ? 4 : -4), y + 4);
+    }
   });
+  ctx.textAlign = 'left';
 }
 
 export async function exportTxCard(bean, tx) {
@@ -191,8 +197,8 @@ export async function exportTxCard(bean, tx) {
     ctx.fillText('本 次 风 味 评 分', L, y);
     if (hasRate) {
       const radarCy = y + 158;
-      drawRadar(ctx, L + 128, radarCy, 104, score);
-      /* 右侧分维列表 */
+      drawRadar(ctx, L + 136, radarCy, 104, score);
+      /* 右侧分维列表（数字基线 +2 补偿 Playfair 视觉重心偏上） */
       let ly = y + 30;
       RATING_DIMS.forEach((d) => {
         const v = score[d.key] || 0;
@@ -203,14 +209,22 @@ export async function exportTxCard(bean, tx) {
         ctx.fillStyle = ACCENT;
         roundRect(ctx, L + 360, ly - 6, Math.max(6, 220 * Math.min(v, 10) / 10), 10, 5); ctx.fill();
         ctx.font = `700 19px ${NUM}`; ctx.fillStyle = ACCENT_DEEP;
-        ctx.fillText(String(v), L + 596, ly + 6);
+        ctx.fillText(String(v), L + 596, ly + 8);
         ly += 40;
       });
-      /* 本次自动得分 */
+      /* 本次得分：整组与右侧评分列（L+300 ~ L+620）水平居中，消除左悬空 */
       ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
-      ctx.fillText('本次得分', L + 300, ly + 18);
+      const scoreColL = L + 300, scoreColR = L + 620;
+      const bigText = String(score.overall);
+      ctx.font = `700 56px ${NUM}`;
+      const bigW = ctx.measureText(bigText).width;
+      const scoreCx = (scoreColL + scoreColR) / 2;
+      ctx.textAlign = 'center';
+      ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
+      ctx.fillText('本 次 得 分', scoreCx, ly + 18);
       ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
-      ctx.fillText(String(score.overall), L + 300, ly + 80);
+      ctx.fillText(bigText, scoreCx, ly + 80);
+      ctx.textAlign = 'left';
       y = Math.max(ly + 96, radarCy + 146);
     } else {
       y += 48;
