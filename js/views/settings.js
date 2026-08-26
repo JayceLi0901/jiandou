@@ -123,7 +123,7 @@ export async function render(view) {
     <div class="set-group">
       <div class="group-label">关于</div>
       <div class="card" style="margin-bottom:0;">
-        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.13.3</span></div>
+        <div class="kv"><span class="k">版本</span><span class="v">鉴豆 v1.13.4</span></div>
         <div class="kv"><span class="k">本机数据</span><span class="v">${beanCount} 份档案 · ${txCount} 笔流水</span></div>
         <div class="kv"><span class="k">持久存储</span><span class="v" id="persist-status">检测中…</span></div>
         <div class="kv"><span class="k">数据存储</span><span class="v">全部在本机（IndexedDB）</span></div>
@@ -158,23 +158,38 @@ export async function render(view) {
     toast('识别配置已保存', 'ok');
   });
 
-  /* 一键测试识别配置是否可用 */
+  /* 一键测试识别配置是否可用（带一次重试；限流≠配置错） */
   $('#cfg-test')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
-    btn.disabled = true; const old = btn.textContent; btn.textContent = '测试中…';
-    try {
-      const base = $('#cfg-base').value.trim() || 'https://open.bigmodel.cn/api/paas/v4';
-      const res = await fetch(base.replace(/\/+$/, '') + '/chat/completions', {
+    btn.disabled = true; const old = btn.textContent;
+    const base = ($('#cfg-base').value.trim() || 'https://open.bigmodel.cn/api/paas/v4').replace(/\/+$/, '');
+    const key = $('#cfg-key').value.trim();
+    const model = $('#cfg-model').value.trim() || 'glm-4.6v-flash';
+    if (!key) { toast('请先填入 API Key', 'err'); btn.disabled = false; return; }
+    let res = null;
+    for (let i = 0; i < 2; i++) {
+      if (i) { btn.textContent = '限流，3 秒后重试…'; await new Promise((r) => setTimeout(r, 3000)); }
+      btn.textContent = i ? '重试中…' : '测试中…';
+      res = await fetch(base + '/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + $('#cfg-key').value.trim() },
-        body: JSON.stringify({ model: $('#cfg-model').value.trim() || 'glm-4.6v-flash', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
-      });
-      if (res.ok) toast('配置可用 ✓', 'ok');
-      else {
-        let detail = ''; try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
-        toast('HTTP ' + res.status + (detail ? '：' + detail : ''), 'err');
-      }
-    } catch (err) { toast('网络错误：' + err.message, 'err'); }
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      }).catch(() => null);
+      if (!res) break;
+      const j = res.ok ? null : await res.clone().json().catch(() => null);
+      const code = j?.error?.code;
+      const limited = res.status === 429 || code === '1302' || code === '1305' || code === 1113;
+      if (res.ok || !limited) break;
+    }
+    if (!res) toast('网络错误：连不上 API 地址', 'err');
+    else if (res.ok) toast('配置可用 ✓', 'ok');
+    else {
+      let detail = ''; try { detail = (await res.json())?.error?.message || ''; } catch (_) {}
+      const code = (await res.clone().json().catch(() => null))?.error?.code;
+      if (res.status === 429 || code === '1302' || code === '1305' || code === 1113) {
+        toast('配置没问题，只是模型访问量大被限流（正式识别会自动重试，稍后再用）', 'ok');
+      } else toast('HTTP ' + res.status + (detail ? '：' + detail : ''), 'err');
+    }
     btn.disabled = false; btn.textContent = old;
   });
 

@@ -212,19 +212,16 @@ export async function exportTxCard(bean, tx) {
         ctx.fillText(String(v), L + 596, ly + 8);
         ly += 40;
       });
-      /* 本次得分：与行尾数字列视觉右缘对齐的「总计行」，标题贴数字左侧 */
+      /* 本次得分：独立成行，居中于整卡内容区（与雷达图呼应的收尾焦点） */
       const bigText = String(score.overall);
       ctx.font = `700 56px ${NUM}`;
-      const mBig = ctx.measureText(bigText);
-      /* actualBoundingBoxRight = 基线原点到字形实际右缘，比锚点对齐更符合视觉 */
-      const inkW = mBig.actualBoundingBoxRight !== undefined ? mBig.actualBoundingBoxRight : mBig.width;
-      const numColR = L + 614; // 行尾数字列的字形右缘（实测校准）
-      const bigX = numColR - inkW; // 让字形右缘落在基准上
-      ctx.textAlign = 'left';
-      ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
-      ctx.fillText(bigText, bigX, ly + 80);
+      const rowCx = (L + R) / 2;
+      ctx.textAlign = 'center';
       ctx.font = `600 13px ${SERIF}`; ctx.fillStyle = INK3;
-      ctx.fillText('本 次 得 分', bigX - 18, ly + 24);
+      ctx.fillText('本 次 得 分', rowCx, ly + 26);
+      ctx.font = `700 56px ${NUM}`; ctx.fillStyle = INK;
+      ctx.fillText(bigText, rowCx, ly + 88);
+      ctx.textAlign = 'left';
       y = Math.max(ly + 96, radarCy + 146);
     } else {
       y += 48;
