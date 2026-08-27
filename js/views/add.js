@@ -64,9 +64,14 @@ export async function render(view, params) {
       </div>
       <div class="field"><label>风味描述</label>
         <textarea data-f="flavors" placeholder="如：茉莉、柑橘、蜂蜜、红茶尾韵" maxlength="120"></textarea></div>
-      <div class="field"><label>总克重（到手净重，克）*</label>
-        <input type="number" data-f="totalWeight" inputmode="decimal" min="1" max="10000" step="0.1" placeholder="如 200"/>
-        <div class="err-hint">请输入大于 0 的数字</div></div>
+      <div class="field-row">
+        <div class="field"><label>总克重（到手净重，克）*</label>
+          <input type="number" data-f="totalWeight" inputmode="decimal" min="1" max="10000" step="0.1" placeholder="如 200"/>
+          <div class="err-hint">请输入大于 0 的数字</div></div>
+        <div class="field"><label>总价（元）</label>
+          <input type="number" data-f="price" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="如 128"/>
+          <div class="err-hint">请输入不小于 0 的数字</div></div>
+      </div>
 
       <div class="field" style="margin-bottom:0;"><label>养豆天数</label>
         <div class="seg" id="rest-seg">
@@ -94,6 +99,7 @@ export async function render(view, params) {
     }
     $('[data-f="roastDate"]').value = editing.roastDate || '';
     $('[data-f="totalWeight"]').value = editing.totalWeight ?? '';
+    $('[data-f="price"]').value = editing.price ?? '';
     if (editing.photoId) {
       const blob = await db.photos.get(editing.photoId);
       if (blob) { img.src = URL.createObjectURL(blob); img.hidden = false; $('#photo-empty').hidden = true; box.classList.add('has'); }
@@ -200,11 +206,15 @@ export async function render(view, params) {
     const get = (k) => view.querySelector(`[data-f="${k}"]`).value.trim();
     const name = get('name');
     const total = parseFloat(get('totalWeight'));
+    const priceRaw = get('price');
+    const price = priceRaw === '' ? null : parseFloat(priceRaw);
     let ok = true;
     view.querySelector('[data-f="name"]').classList.toggle('invalid', !name);
     const twEl = view.querySelector('[data-f="totalWeight"]');
     twEl.classList.toggle('invalid', !(total > 0));
-    if (!name || !(total > 0)) ok = false;
+    const prEl = view.querySelector('[data-f="price"]');
+    prEl.classList.toggle('invalid', !(price === null || (price >= 0 && price <= 100000)));
+    if (!name || !(total > 0) || !(price === null || (price >= 0 && price <= 100000))) ok = false;
 
     let restDays;
     if (st.restMode === 'custom') {
@@ -232,7 +242,7 @@ export async function render(view, params) {
       Object.assign(bean, {
         name, roaster: get('roaster'), origin: get('origin'), estate: get('estate'),
         variety: get('variety'), process: get('process'), roastDate: get('roastDate'),
-        flavors: get('flavors'), totalWeight: total, restDays, photoId: st.photoId,
+        flavors: get('flavors'), totalWeight: total, price, restDays, photoId: st.photoId,
         updatedAt: now,
       });
       await db.beans.put(bean);

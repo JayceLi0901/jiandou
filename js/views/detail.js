@@ -96,6 +96,7 @@ async function draw(view, full) {
       <div class="kv"><span class="k">处理法</span><span class="v">${esc(bean.process || '—')}</span></div>
       <div class="kv"><span class="k">烘焙日期</span><span class="v">${fmtCN(bean.roastDate) || '—'}${daysRoast != null ? `（第 ${daysRoast} 天）` : ''}</span></div>
       <div class="kv"><span class="k">养豆天数</span><span class="v">${bean.restDays} 天</span></div>
+      ${bean.price != null ? `<div class="kv"><span class="k">总价</span><span class="v">¥${bean.price}${bean.totalWeight ? `（${(bean.price / bean.totalWeight * 1000).toFixed(0)} 元/kg）` : ''}</span></div>` : ''}
       ${bean.flavors ? `<div class="kv"><span class="k">风味</span><span class="v">${esc(bean.flavors)}</span></div>` : ''}
     </div>
 
