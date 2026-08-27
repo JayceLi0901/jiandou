@@ -65,8 +65,8 @@ export async function render(view, params) {
       <div class="field"><label>风味描述</label>
         <textarea data-f="flavors" placeholder="如：茉莉、柑橘、蜂蜜、红茶尾韵" maxlength="120"></textarea></div>
       <div class="field-row">
-        <div class="field"><label>总克重（到手净重，克）*</label>
-          <input type="number" data-f="totalWeight" inputmode="decimal" min="1" max="10000" step="0.1" placeholder="如 200"/>
+        <div class="field"><label>总克重（克）*</label>
+          <input type="number" data-f="totalWeight" inputmode="decimal" min="1" max="10000" step="0.1" placeholder="到手净重，如 200"/>
           <div class="err-hint">请输入大于 0 的数字</div></div>
         <div class="field"><label>总价（元）</label>
           <input type="number" data-f="price" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="如 128"/>

@@ -365,6 +365,8 @@ body {
 .field .err-hint { color: var(--danger); font-size: 11.5px; margin-top: 4px; display: none; }
 .field input.invalid ~ .err-hint { display: block; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+/* 双列表单：label 强制单行，防止两侧折行数不同导致输入框高低不齐 */
+.field-row .field > label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .seg {
   display: flex;
