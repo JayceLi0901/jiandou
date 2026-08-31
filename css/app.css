@@ -602,6 +602,27 @@ input[type="range"].rate::-moz-range-thumb {
 .rank-name { display:block; max-width:100%; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rank-sub { display:block; max-width:100%; font-size: 11.5px; color: var(--ink-3); margin-top: 1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rank-score { font-family: var(--num); font-size: 21px; font-weight: 700; color: var(--accent-deep); }
+.rank-toggle {
+  display: block; width: 100%; margin-top: 4px; padding: 10px 0 2px;
+  background: none; border: none; cursor: pointer;
+  font-size: 12.5px; color: var(--ink-3); letter-spacing: .06em;
+}
+.rank-toggle:active { color: var(--accent-deep); }
+
+/* ---------------- 统计明细弹窗列表 ---------------- */
+.stat-detail-list { max-height: 58vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.stat-detail-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 2px; border-bottom: 1px solid var(--hairline);
+  text-decoration: none; color: inherit;
+}
+.stat-detail-row:last-child { border-bottom: none; }
+.stat-detail-main { flex: 1; min-width: 0; }
+.stat-detail-name { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-detail-sub { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-detail-bar { flex: 0 0 96px; height: 8px; border-radius: 4px; background: #F1ECE4; overflow: hidden; }
+.stat-detail-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #C99B6A, #96702F); }
+.stat-detail-val { flex: 0 0 auto; font-family: var(--num); font-size: 14px; font-weight: 700; color: var(--accent-deep); }
 
 /* ---------------- 设置页 ---------------- */
 .set-group { margin-bottom: 20px; }

@@ -139,6 +139,8 @@ export function areaChart(points, { unit = 'g' } = {}) {
     }
     const isPeak = points[i].value === maxV && maxV > 0;
     dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isPeak ? 3.4 : 2.6}" fill="${isPeak ? '#8F5D2C' : '#FFFDF9'}" stroke="#B0763B" stroke-width="1.6"/>`;
+    /* 透明大热区方便手指点按：点数据点查看该时段的冲煮明细 */
+    dots += `<circle class="chart-dot-hit" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="15" fill="rgba(0,0,0,0)" style="cursor:pointer;"/>`;
     if (i % 2 === (n % 2 === 0 ? 1 : 0) || n <= 5) {
       labelsX += `<text x="${x.toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="9.5" fill="#AE9E8D">${esc2(points[i].label)}</text>`;
     }

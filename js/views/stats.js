@@ -2,6 +2,7 @@
 import { db } from '../db.js';
 import { barChart, donutChart, areaChart } from '../charts.js';
 import { avgRatings, parseDate, esc, fmtG } from '../util.js';
+import { sheet } from '../ui.js';
 
 export async function render(view) {
   const beans = await db.beans.all();
@@ -16,9 +17,11 @@ export async function render(view) {
   const brews = txs.filter((t) => t.type === 'brew');
   const brewGrams = brews.reduce((s, t) => s + (Number(t.grams) || 0), 0);
   const totalRemain = active.reduce((s, b) => s + (Number(b.remainingWeight) || 0), 0);
+  const beanById = new Map(beans.map((b) => [b.id, b]));
 
   const originItems = topBy(beans, 'origin', 5);
   const processItems = topBy(beans, 'process', 5);
+  const roasterItems = topBy(beans, 'roaster', 5);
   const originDonut = donutChart(originItems);
   const processDonut = donutChart(processItems);
 
@@ -43,28 +46,30 @@ export async function render(view) {
         </select>
       </div>
       <div id="consumption-chart"></div>
+      <div class="muted" style="margin-top:6px;">点曲线上的圆点，看那天 / 那周的冲煮明细</div>
     </div>
 
     <div class="card">
       <div class="card-title">喝过的豆种 TOP</div>
-      ${barChart(topBy(beans, 'variety', 5), { unit: '' }) || ''}
+      <div id="variety-chart">${barChart(topBy(beans, 'variety', 5), { unit: '' }) || ''}</div>
     </div>
 
     <div class="card">
       <div class="card-title">产地分布</div>
       <div class="donut-box" id="donut-origin"><div class="donut-stage">${originDonut.svg}<div class="donut-detail" hidden><div class="donut-detail-name"></div><div class="donut-detail-meta"></div></div></div>${originDonut.legend}
-        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
+        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看 · 点「其他」看完整列表</div></div>
     </div>
 
     <div class="card">
       <div class="card-title">处理法分布</div>
       <div class="donut-box" id="donut-process"><div class="donut-stage">${processDonut.svg}<div class="donut-detail" hidden><div class="donut-detail-name"></div><div class="donut-detail-meta"></div></div></div>${processDonut.legend}
-        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看</div></div>
+        <div class="muted" style="margin-top:8px;">点扇区或图例单独查看 · 点「其他」看完整列表</div></div>
     </div>
 
     <div class="card">
       <div class="card-title">烘焙商 TOP</div>
-      ${barChart(topBy(beans, 'roaster', 5), { labelAlign: 'start' })}
+      <div id="roaster-chart">${barChart(roasterItems, { labelAlign: 'start' })}</div>
+      <div class="muted" style="margin-top:6px;">有多个烘焙商时，点「其他」看完整列表</div>
     </div>
 
     <div class="card">
@@ -72,22 +77,116 @@ export async function render(view) {
       <div id="rank-list"></div>
     </div>`;
 
-  /* 环形图交互：点扇区/图例 → 高亮单项并在图侧显示明细；再点取消 */
-  wireDonut(view.querySelector('#donut-origin'), originItems);
-  wireDonut(view.querySelector('#donut-process'), processItems);
+  /* 环形图交互：点扇区/图例 → 高亮单项并在图侧显示明细；点「其他」→ 弹窗列全部分类 */
+  wireDonut(view.querySelector('#donut-origin'), originItems, () => showOtherSheet('产地', beans, 'origin'));
+  wireDonut(view.querySelector('#donut-process'), processItems, () => showOtherSheet('处理法', beans, 'process'));
+  wireBarOther(view.querySelector('#roaster-chart'), () => showOtherSheet('烘焙商', beans, 'roaster'));
+
   const range = view.querySelector('#stats-range');
+  let curPoints = [];
+  let curBrews = [];
   const applyRange = () => {
     const info = rangeInfo(range.value, brews);
     view.querySelector('#consumption-title').textContent = `${info.label}冲煮消耗`;
     view.querySelector('#consumption-chart').innerHTML = `<div class="consumption-total">${fmtG(info.grams)}<small>g</small></div>${info.filtered.length ? areaChart(info.points) : '<div class="muted consumption-empty">这段时间还没有冲煮记录</div>'}`;
     view.querySelector('#rank-title').textContent = `风味排名 · ${info.label}`;
-    view.querySelector('#rank-list').innerHTML = rankHtml(beans, info.filtered);
+    view.querySelector('#rank-list').innerHTML = rankHtml(beans, info.filtered, rankExpanded);
+    curPoints = info.points;
+    curBrews = info.filtered;
+    wireDots();
+    wireRankToggle();
+  };
+  /* 点消耗曲线数据点 → 弹窗展示该时段每笔冲煮 */
+  const wireDots = () => {
+    view.querySelectorAll('#consumption-chart .chart-dot-hit').forEach((dot) => {
+      dot.addEventListener('click', () => {
+        const i = Number(dot.dataset.i);
+        const p = curPoints[i];
+        if (!p) return;
+        showPeriodSheet(range.value, p, curBrews, beanById);
+      });
+    });
+  };
+  const wireRankToggle = () => {
+    view.querySelector('#rank-toggle')?.addEventListener('click', () => {
+      rankExpanded = !rankExpanded;
+      const info = rangeInfo(range.value, brews);
+      view.querySelector('#rank-list').innerHTML = rankHtml(beans, info.filtered, rankExpanded);
+      wireRankToggle();
+    });
   };
   range.addEventListener('change', applyRange);
   applyRange();
 }
 
-function wireDonut(box, items) {
+/* ---------- 弹窗：某时段的冲煮明细 ---------- */
+function showPeriodSheet(rangeVal, point, brews, beanById) {
+  const keyOf = (t) => {
+    const d = parseDate(t.date);
+    if (!d) return null;
+    if (rangeVal === 'week') return dateKey(d);
+    if (rangeVal === 'month') return Math.min(4, Math.max(0, 4 - Math.floor((Date.now() - d) / 604800000)));
+    if (rangeVal === 'all' && /^\d{4}$/.test(String(point.key))) return String(d.getFullYear());
+    return monthKey(d);
+  };
+  const rows = brews
+    .map((t) => ({ t, k: keyOf(t) }))
+    .filter((r) => r.k === point.key)
+    .sort((a, b) => (a.t.date < b.t.date ? 1 : -1));
+  const grams = rows.reduce((s, r) => s + (Number(r.t.grams) || 0), 0);
+  const title = `${point.label}的冲煮 · ${rows.length} 笔 · ${fmtG(grams)}g`;
+  const list = rows.length ? rows.map(({ t }) => {
+    const b = beanById.get(t.beanId);
+    return `<a class="stat-detail-row" href="#/bean/${t.beanId}">
+      <span class="stat-detail-main"><span class="stat-detail-name">${esc(b?.name || '已删除的档案')}</span>
+      <span class="stat-detail-sub">${esc(t.date)}${b?.roaster ? ' · ' + esc(b.roaster) : ''}</span></span>
+      <span class="stat-detail-val">${fmtG(t.grams)}g</span>
+    </a>`;
+  }).join('') : '<div class="muted" style="padding:14px 0;">这个时段没有冲煮记录</div>';
+  sheet({ title, html: `<div class="stat-detail-list">${list}</div>` });
+}
+
+/* ---------- 弹窗：「其他」的完整分类明细 ---------- */
+function showOtherSheet(kindLabel, beans, field) {
+  const full = topByFull(beans, field);
+  const title = `${kindLabel} · 全部 ${full.length} 类`;
+  const max = Math.max(...full.map((i) => i.value), 1);
+  const list = full.map((it, idx) => `
+    <div class="stat-detail-row" style="cursor:default;">
+      <span class="stat-detail-main"><span class="stat-detail-name">${esc(it.label)}</span></span>
+      <span class="stat-detail-bar"><i style="width:${Math.max(6, 100 * it.value / max)}%"></i></span>
+      <span class="stat-detail-val">${it.value} 包</span>
+    </div>`).join('');
+  sheet({ title, html: `<div class="stat-detail-list">${list}</div>` });
+}
+
+function topByFull(beans, key) {
+  const map = new Map();
+  for (const b of beans) {
+    const k = (b[key] || '').trim() || '未记录';
+    map.set(k, (map.get(k) || 0) + 1);
+  }
+  return [...map.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .filter((i) => i.value > 0)
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'zh'));
+}
+
+/* 烘焙商柱状图的「其他」行点击 → 弹窗（柱状图是 SVG text，加透明热区） */
+function wireBarOther(container, onOther) {
+  if (!container) return;
+  const texts = container.querySelectorAll('text');
+  texts.forEach((t) => {
+    if (t.textContent === '其他') {
+      t.style.cursor = 'pointer';
+      t.style.textDecoration = 'underline dotted';
+      t.style.textUnderlineOffset = '3px';
+      t.addEventListener('click', onOther);
+    }
+  });
+}
+
+function wireDonut(box, items, onOther) {
   if (!box) return;
   const segs = box.querySelectorAll('.donut-seg');
   const legs = box.querySelectorAll('.legend-item');
@@ -105,12 +204,14 @@ function wireDonut(box, items) {
       const it = items[sel] || { label: '—', value: 0 };
       const pct = Math.round((it.value / total) * 100);
       detailName.textContent = String(it.label);
-      detailMeta.textContent = `${it.value} 包 · ${pct}%`;
+      detailMeta.textContent = it.label === '其他' ? `${it.value} 包 · 点「其他」看明细` : `${it.value} 包 · ${pct}%`;
     }
   };
   [...segs, ...legs].forEach((el) => {
     el.addEventListener('click', () => {
       const i = Number(el.dataset.i);
+      const it = items[i];
+      if (it && it.label === '其他' && onOther) { onOther(); return; }
       sel = sel === i ? -1 : i;
       paint();
     });
@@ -165,7 +266,7 @@ function consumptionPoints(range, brews, start, now) {
     else key = monthKey(d);
     const p = points.find((x) => x.key === key); if (p) p.value += Number(t.grams) || 0;
   }
-  return points.map(({ label, value }) => ({ label, value: Math.round(value) }));
+  return points.map(({ key, label, value }) => ({ key, label, value: Math.round(value) }));
 }
 
 function dateKey(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
@@ -188,20 +289,21 @@ function topBy(beans, key, n) {
   return arr.filter((i) => i.value > 0);
 }
 
-/* ---------- 评分排行 ---------- */
-function rankHtml(beans, txs) {
+/* ---------- 评分排行（默认前 5，可展开全部） ---------- */
+let rankExpanded = false;
+function rankHtml(beans, txs, expanded) {
   const byBean = new Map();
   for (const t of txs) {
     if (!byBean.has(t.beanId)) byBean.set(t.beanId, []);
     byBean.get(t.beanId).push(t);
   }
-  const ranked = beans
+  const rankedAll = beans
     .map((b) => ({ bean: b, avg: avgRatings(byBean.get(b.id) || []) }))
     .filter((r) => r.avg && r.avg.overall > 0)
-    .sort((a, b) => b.avg.overall - a.avg.overall)
-    .slice(0, 5);
-  if (!ranked.length) return `<div class="muted" style="padding:10px 0;">冲煮时打过分，这里会出现你的高分榜单 🏆</div>`;
-  return ranked.map((r, i) => `
+    .sort((a, b) => b.avg.overall - a.avg.overall);
+  if (!rankedAll.length) return `<div class="muted" style="padding:10px 0;">冲煮时打过分，这里会出现你的高分榜单 🏆</div>`;
+  const ranked = expanded ? rankedAll : rankedAll.slice(0, 5);
+  const items = ranked.map((r, i) => `
     <a class="rank-item rank-${i + 1}" href="#/bean/${r.bean.id}">
       <span class="rank-no medal-${i + 1}">${i + 1}</span>
       <span class="rank-main">
@@ -210,4 +312,8 @@ function rankHtml(beans, txs) {
       </span>
       <span class="rank-score">${r.avg.overall}</span>
     </a>`).join('');
+  const toggle = rankedAll.length > 5
+    ? `<button class="rank-toggle" id="rank-toggle">${expanded ? '收起 ▲' : `展开全部 ${rankedAll.length} 个 ▼`}</button>`
+    : '';
+  return items + toggle;
 }
